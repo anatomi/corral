@@ -93,7 +93,7 @@ We can also input/output to S3 by pointing to an S3 bucket/files for input/outpu
 go run word_count.go --out s3://my-output-bucket/ s3://my-input-bucket/*
 ```
 
-More comprehensive examples can be found in [the examples folder](https://github.com/bcongdon/corral/tree/master/examples).
+More comprehensive examples can be found in [the examples folder](https://github.com/ISE-SMILE/corral/tree/master/examples).
 
 ## Deploying in Lambda
 
