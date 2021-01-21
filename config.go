@@ -5,7 +5,7 @@ import (
 )
 
 func loadConfig() {
-	viper.SetConfigName("corralrc")
+	viper.SetConfigName("corralrc.yaml")
 	viper.AddConfigPath(".")
 	viper.AddConfigPath("$HOME/.corral")
 

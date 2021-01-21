@@ -148,18 +148,26 @@ Below are the config settings that may be changed.
 * `workingLocation` (string) - The location (local or S3) to use for writing intermediate and output data.
 * `verbose` (bool) - Enables debug logging if set to `true`
 
-#### Lambda Settings
+#### Platform Settings
+<!-- TODO:change these to generic terms! -->
 * `lambdaFunctionName` (string) - The name to use for created Lambda functions. (Default: `corral_function`)
-* `lambdaManageRole` (bool) - Whether corral should manage creating an IAM role for Lambda execution. (Default: `true`)
-* `lambdaRoleARN` (string) - If `lambdaManageRole` is disabled, the ARN specified in `lambdaRoleARN` is used as the Lambda function's executor role.
 * `lambdaTimeout` (int64) - The timeout (maximum function duration) in seconds of created Lambda functions. See [AWS lambda docs](https://docs.aws.amazon.com/lambda/latest/dg/resource-model.html) for details. (Default: `180`)
 * `lambdaMemory` (int64) - The maximum memory that a Lambda function may use. See [AWS lambda docs](https://docs.aws.amazon.com/lambda/latest/dg/resource-model.html) for details. (Default: `1500`)
+
+#### Lambda Settings
+* `lambdaManageRole` (bool) - Whether corral should manage creating an IAM role for Lambda execution. (Default: `true`)
+* `lambdaRoleARN` (string) - If `lambdaManageRole` is disabled, the ARN specified in `lambdaRoleARN` is used as the Lambda function's executor role.
+
+#### Minio Settings
+* `minioHost` (string) - The address of the minio server, this will be injected into the function code at runtime.
+* `minioUser` (string) - The user for the minio account
+* `minioKey`  (string) - The access key for the minio accout.
 
 ### Command Line Flags
 
 The following flags are available at runtime as command-line flags:
 ```
-      --lambda            Use lambda backend
+      --backend           Use *lambda*, *openwhisk* or *local* backend
       --memprofile file   Write memory profile to file
   -o, --out directory     Output directory (can be local or in S3)
       --undeploy          Undeploy the Lambda function and IAM permissions without running the driver

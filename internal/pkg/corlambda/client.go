@@ -128,6 +128,12 @@ func (l *LambdaClient) createFunction(function *FunctionConfig, code []byte) err
 		ZipFile: code,
 	}
 
+	//injecting config values into deployment
+	env := &lambda.Environment{}
+	variables := make(map[string]*string)
+	corbuild.InjectConfiguration(variables)
+	env.SetVariables(variables)
+
 	createArgs := &lambda.CreateFunctionInput{
 		Code:         funcCode,
 		FunctionName: aws.String(function.Name),
@@ -136,6 +142,7 @@ func (l *LambdaClient) createFunction(function *FunctionConfig, code []byte) err
 		Role:         aws.String(function.RoleARN),
 		Timeout:      aws.Int64(function.Timeout),
 		MemorySize:   aws.Int64(function.MemorySize),
+		Environment:  env,
 	}
 
 	_, err := l.Client.CreateFunction(createArgs)

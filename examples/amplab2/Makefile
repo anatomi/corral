@@ -24,13 +24,13 @@ test_al2_s3_tiny: $(PROG_NAME) tiny_data
 	$(BIN_DIR)/$(PROG_NAME) --out s3://${BUCKET} s3://${BUCKET}/part-*
 
 test_al2_lambda_tiny: $(PROG_NAME) tiny_data
-	$(BIN_DIR)/$(PROG_NAME) --lambda --out s3://${BUCKET} s3://${BUCKET}/part-*
+	$(BIN_DIR)/$(PROG_NAME) --backend lambda --out s3://${BUCKET} s3://${BUCKET}/part-*
 
 test_al2_lambda_1node: $(PROG_NAME)
-	$(BIN_DIR)/$(PROG_NAME) --lambda --out s3://${BUCKET} s3://$(AMPLAB_PATH)/1node/uservisits/part-*
+	$(BIN_DIR)/$(PROG_NAME) --backend lambda --out s3://${BUCKET} s3://$(AMPLAB_PATH)/1node/uservisits/part-*
 
 test_al2_lambda_5node: $(PROG_NAME)
-	.$(BIN_DIR)/$(PROG_NAME) --lambda --out s3://${BUCKET} s3://$(AMPLAB_PATH)/5nodes/uservisits/part-*
+	.$(BIN_DIR)/$(PROG_NAME) --backend lambda --out s3://${BUCKET} s3://$(AMPLAB_PATH)/5nodes/uservisits/part-*
 
 clean:
 	find . -name "*.out" -print0 | xargs -0 rm

@@ -147,8 +147,20 @@ func NewWhiskClient() *WhiskClient {
 	}
 }
 
+type whiskPayload struct {
+	value interface{}        `json:"value"`
+	env   map[string]*string `json:"env"`
+}
+
 func (l *WhiskClient) Invoke(name string, payload interface{}) (io.ReadCloser, error) {
-	invoke, response, err := l.Client.Actions.Invoke(name, payload, true, true)
+	invocation := whiskPayload{
+		value: payload,
+		env:   make(map[string]*string),
+	}
+
+	corbuild.InjectConfiguration(invocation.env)
+
+	invoke, response, err := l.Client.Actions.Invoke(name, invocation, true, true)
 	if err != nil {
 		log.Debugf("failed to invoke %s with %+v", name, payload)
 		return nil, err

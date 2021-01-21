@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/dustin/go-humanize"
+	"github.com/spf13/viper"
 	"io"
 	"io/ioutil"
 	"os"
@@ -82,4 +83,18 @@ func BuildPackage() ([]byte, error) {
 
 	log.Debugf("Final zipped function binary size: %s", humanize.Bytes(uint64(len(zipBuf.Bytes()))))
 	return zipBuf.Bytes(), nil
+}
+
+func InjectConfiguration(env map[string]*string) {
+	if host := viper.GetString("minioHost"); host != "" {
+		env["MINIO_HOST"] = &host
+	}
+
+	if user := viper.GetString("minioUser"); user != "" {
+		env["MINIO_USER"] = &user
+	}
+
+	if key := viper.GetString("minioKey"); key != "" {
+		env["MINIO_KEY"] = &key
+	}
 }

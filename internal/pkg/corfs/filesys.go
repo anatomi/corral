@@ -1,6 +1,7 @@
 package corfs
 
 import (
+	log "github.com/sirupsen/logrus"
 	"io"
 	"strings"
 )
@@ -12,6 +13,7 @@ type FileSystemType int
 const (
 	Local FileSystemType = iota
 	S3
+	MINIO
 )
 
 // FileSystem provides the file backend for MapReduce jobs.
@@ -39,9 +41,15 @@ func InitFilesystem(fsType FileSystemType) FileSystem {
 	var fs FileSystem
 	switch fsType {
 	case Local:
+		log.Debug("using local fs")
 		fs = &LocalFileSystem{}
 	case S3:
+		log.Debug("using s3 fs")
 		fs = &S3FileSystem{}
+	case MINIO:
+		log.Debug("using minio fs")
+		fs = &MinioFileSystem{}
+
 	}
 
 	fs.Init()
@@ -55,8 +63,13 @@ func InitFilesystem(fsType FileSystemType) FileSystem {
 func InferFilesystem(location string) FileSystem {
 	var fs FileSystem
 	if strings.HasPrefix(location, "s3://") {
+		log.Debug("using s3 fs")
 		fs = &S3FileSystem{}
+	} else if strings.HasPrefix(location, "minio://") {
+		log.Debug("using minio fs")
+		fs = &MinioFileSystem{}
 	} else {
+		log.Debug("using local fs")
 		fs = &LocalFileSystem{}
 	}
 

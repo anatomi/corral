@@ -1,0 +1,8 @@
+verbose: true
+minioHost: http://130.149.158.143:32005
+minioUser: smile
+minioKey: smile2021
+
+lambdaFunctionName: guest/corral_test
+lambdaMemory: 256
+lambdaTimeout: 180
