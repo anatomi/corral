@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"sync/atomic"
 
+	"github.com/aws/aws-lambda-go/lambda"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 
@@ -45,6 +46,7 @@ func prepareResult(job *Job) string {
 	return string(payload)
 }
 
+//TODO: prob. need to lift this into its own interface/abstraction
 func handleRequest(ctx context.Context, task task) (string, error) {
 	// Precaution to avoid running out of memory for reused Lambdas
 	debug.FreeOSMemory()
@@ -95,6 +97,12 @@ func loadTaskResult(payload []byte) taskResult {
 		log.Errorf("%s", err)
 	}
 	return result
+}
+
+func (l *lambdaExecutor) Start(d *Driver) {
+	lambdaDriver = d
+	log.Info("called Start")
+	lambda.Start(handleRequest)
 }
 
 func (l *lambdaExecutor) RunMapper(job *Job, jobNumber int, binID uint, inputSplits []inputSplit) error {

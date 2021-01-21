@@ -10,7 +10,18 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func skipOnMissingBucket(t *testing.T) {
+	if testing.Short() {
+		t.SkipNow()
+	}
+	bucket := os.Getenv("AWS_TEST_BUCKET")
+	if bucket == "" {
+		t.Skip("No test bucket is set under $AWS_TEST_BUCKET")
+	}
+}
+
 func getS3TestBackend(t *testing.T) (string, *S3FileSystem) {
+	skipOnMissingBucket(t)
 	backend := &S3FileSystem{}
 
 	bucket := os.Getenv("AWS_TEST_BUCKET")
@@ -25,6 +36,7 @@ func getS3TestBackend(t *testing.T) (string, *S3FileSystem) {
 }
 
 func cleanup(backend *S3FileSystem, t *testing.T) {
+	skipOnMissingBucket(t)
 	bucket := os.Getenv("AWS_TEST_BUCKET")
 	objects, err := backend.ListFiles("s3://" + bucket + "/")
 

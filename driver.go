@@ -19,7 +19,7 @@ import (
 	pb "gopkg.in/cheggaaa/pb.v1"
 
 	"github.com/ISE-SMILE/corral/internal/pkg/corfs"
-	"github.com/aws/aws-lambda-go/lambda"
+
 	flag "github.com/spf13/pflag"
 )
 
@@ -176,13 +176,27 @@ func (d *Driver) runReducePhase(job *Job, jobNumber int) {
 	bar.Finish()
 }
 
+func (d *Driver) runOnCloudPlatfrom() bool {
+	if runningInLambda() || runningInWhisk() {
+		if lBackend, ok := d.executor.(platform); ok {
+			//THis blocks thus in a cloud enviroment e.g. the deplyed function this is whats executed, this is mindfunc 3000x
+			lBackend.Start(d)
+			return true
+		}
+	}
+
+	return false
+}
+
 // run starts the Driver
 func (d *Driver) run() {
-	if runningInLambda() {
-		lambdaDriver = d
-		lambda.Start(handleRequest)
+	if d.runOnCloudPlatfrom() {
+		log.Info("Running on FaaS runtime")
 	}
-	if lBackend, ok := d.executor.(*lambdaExecutor); ok {
+
+	//TODO introduce interface for deploy/undeploy
+	if lBackend, ok := d.executor.(platform); ok {
+
 		lBackend.Deploy()
 	}
 
@@ -216,10 +230,13 @@ func (d *Driver) run() {
 	}
 }
 
-var lambdaFlag = flag.Bool("lambda", false, "Use lambda backend")
+//TODO: move bool flag to string?
+var backendFlag = flag.StringP("backend", "b", "", "Define backend [local,lambda,whisk] - default local")
+
 var outputDir = flag.StringP("out", "o", "", "Output `directory` (can be local or in S3)")
 var memprofile = flag.String("memprofile", "", "Write memory profile to `file`")
 var verbose = flag.BoolP("verbose", "v", false, "Output verbose logs")
+
 var undeploy = flag.Bool("undeploy", false, "Undeploy the Lambda function and IAM permissions without running the driver")
 
 // Main starts the Driver, running the submitted jobs.
@@ -229,14 +246,27 @@ func (d *Driver) Main() {
 	}
 
 	if *undeploy {
-		lambda := newLambdaExecutor(viper.GetString("lambdaFunctionName"))
-		lambda.Undeploy()
+		//TODO: this is a shitty interface/abstraction
+		if backendFlag != nil {
+			panic("missing backend flag!")
+		}
+		if *backendFlag == "lambda" {
+			lambda := newLambdaExecutor(viper.GetString("lambdaFunctionName"))
+			lambda.Undeploy()
+		} else if *backendFlag == "whisk" {
+			whisk := newWhiskExecutor(viper.GetString("lambdaFunctionName"))
+			whisk.Undeploy()
+		}
 		return
 	}
 
 	d.config.Inputs = append(d.config.Inputs, flag.Args()...)
-	if *lambdaFlag {
-		d.executor = newLambdaExecutor(viper.GetString("lambdaFunctionName"))
+	if backendFlag != nil {
+		if *backendFlag == "lambda" {
+			d.executor = newLambdaExecutor(viper.GetString("lambdaFunctionName"))
+		} else if *backendFlag == "whisk" {
+			d.executor = newWhiskExecutor(viper.GetString("lambdaFunctionName"))
+		}
 	}
 
 	if *outputDir != "" {
