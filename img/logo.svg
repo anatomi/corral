@@ -1,6 +1,4 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<!-- Created with Inkscape (http://www.inkscape.org/) -->
-
 <svg
    xmlns:dc="http://purl.org/dc/elements/1.1/"
    xmlns:cc="http://creativecommons.org/ns#"
@@ -14,8 +12,8 @@
    viewBox="0 0 666.89039 651.67697"
    id="svg2"
    version="1.1"
-   inkscape:version="0.91 r13725"
-   sodipodi:docname="drawing.svg">
+   inkscape:version="1.0.1 (3bc2e813f5, 2020-09-07, custom)"
+   sodipodi:docname="logo.svg">
   <defs
      id="defs4">
     <clipPath
@@ -43,15 +41,16 @@
      inkscape:document-units="px"
      inkscape:current-layer="layer1"
      showgrid="false"
-     inkscape:window-width="1916"
-     inkscape:window-height="1035"
-     inkscape:window-x="4"
-     inkscape:window-y="1"
+     inkscape:window-width="1920"
+     inkscape:window-height="971"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
      inkscape:window-maximized="1"
      fit-margin-top="20"
      fit-margin-left="20"
      fit-margin-right="20"
-     fit-margin-bottom="20" />
+     fit-margin-bottom="20"
+     inkscape:document-rotation="0" />
   <metadata
      id="metadata7">
     <rdf:RDF>
@@ -60,7 +59,7 @@
         <dc:format>image/svg+xml</dc:format>
         <dc:type
            rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
-        <dc:title></dc:title>
+        <dc:title />
       </cc:Work>
     </rdf:RDF>
   </metadata>
@@ -71,47 +70,52 @@
      transform="translate(-53.353922,-149.9893)">
     <text
        xml:space="preserve"
-       style="font-style:normal;font-variant:normal;font-weight:900;font-stretch:normal;font-size:205.60545349px;line-height:125%;font-family:Avenir;-inkscape-font-specification:'Avenir, Heavy';text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       x="115.17342"
-       y="728.33289"
-       id="text3336"
-       sodipodi:linespacing="125%"><tspan
+       style="font-style:normal;font-variant:normal;font-weight:900;font-stretch:normal;font-size:8.05406px;line-height:0%;font-family:Avenir;-inkscape-font-specification:'Avenir, Heavy';text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.671171px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       x="57.42004"
+       y="708.15302"
+       id="text3336"><tspan
          sodipodi:role="line"
          id="tspan3338"
-         x="115.17342"
-         y="728.33289"
-         style="font-style:normal;font-variant:normal;font-weight:900;font-stretch:normal;font-size:205.60545349px;line-height:125%;font-family:Avenir;-inkscape-font-specification:'Avenir, Heavy';text-align:start;writing-mode:lr-tb;text-anchor:start;fill:#ef7900;fill-opacity:1">corral++</tspan></text>
+         x="57.42004"
+         y="708.15302"
+         style="font-style:normal;font-variant:normal;font-weight:900;font-stretch:normal;font-size:134.64px;line-height:125%;font-family:Avenir;-inkscape-font-specification:'Avenir, Heavy';text-align:start;writing-mode:lr-tb;text-anchor:start;fill:#ef7900;fill-opacity:1;stroke-width:0.671171px">corral++</tspan></text>
     <flowRoot
        xml:space="preserve"
        id="flowRoot3340"
-       style="font-style:normal;font-weight:normal;font-size:40px;line-height:125%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"><flowRegion
+       style="font-style:normal;font-weight:normal;line-height:0.01%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"><flowRegion
          id="flowRegion3342"><rect
            id="rect3344"
            width="194.28572"
            height="245.71428"
            x="122.85714"
            y="218.07649" /></flowRegion><flowPara
-         id="flowPara3346"></flowPara></flowRoot>    <flowRoot
+         id="flowPara3346"
+         style="font-size:40px;line-height:1.25"> </flowPara></flowRoot>
+    <flowRoot
        xml:space="preserve"
        id="flowRoot3348"
-       style="font-style:normal;font-weight:normal;font-size:40px;line-height:125%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"><flowRegion
+       style="font-style:normal;font-weight:normal;line-height:0.01%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"><flowRegion
          id="flowRegion3350"><rect
            id="rect3352"
            width="391.42856"
            height="402.85715"
            x="51.42857"
            y="595.21936" /></flowRegion><flowPara
-         id="flowPara3354"></flowPara></flowRoot>    <flowRoot
+         id="flowPara3354"
+         style="font-size:40px;line-height:1.25"> </flowPara></flowRoot>
+    <flowRoot
        xml:space="preserve"
        id="flowRoot4156"
-       style="font-style:normal;font-weight:normal;font-size:40px;line-height:125%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"><flowRegion
+       style="font-style:normal;font-weight:normal;line-height:0.01%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"><flowRegion
          id="flowRegion4158"><rect
            id="rect4160"
            width="591.42859"
            height="348.57144"
            x="68.571426"
            y="566.64795" /></flowRegion><flowPara
-         id="flowPara4162"></flowPara></flowRoot>    <g
+         id="flowPara4162"
+         style="font-size:40px;line-height:1.25"> </flowPara></flowRoot>
+    <g
        id="g4266"
        transform="matrix(5.2887162,0,0,5.2887162,125.02406,149.45777)"
        style="fill:#a25200;fill-opacity:1"
