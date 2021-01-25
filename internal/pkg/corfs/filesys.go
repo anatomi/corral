@@ -40,20 +40,33 @@ type FileInfo struct {
 func InitFilesystem(fsType FileSystemType) FileSystem {
 	var fs FileSystem
 	switch fsType {
-	case Local:
-		log.Debug("using local fs")
-		fs = &LocalFileSystem{}
-	case S3:
-		log.Debug("using s3 fs")
-		fs = &S3FileSystem{}
-	case MINIO:
-		log.Debug("using minio fs")
-		fs = &MinioFileSystem{}
+		case Local:
+			log.Debug("using local fs")
+			fs = &LocalFileSystem{}
+		case S3:
+			log.Debug("using s3 fs")
+			fs = &S3FileSystem{}
+		case MINIO:
+			log.Debug("using minio fs")
+			fs = &MinioFileSystem{}
 
 	}
 
 	fs.Init()
 	return fs
+}
+
+func FilesystemType(fs FileSystem) FileSystemType {
+	if _,ok := fs.(*LocalFileSystem);ok {
+		return Local
+	}
+	if _,ok := fs.(*S3FileSystem);ok {
+		return S3
+	}
+	if _,ok := fs.(*MinioFileSystem);ok {
+		return MINIO
+	}
+	return S3
 }
 
 // InferFilesystem initializes a filesystem by inferring its type from

@@ -3,11 +3,15 @@ package corral
 import (
 	"bufio"
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/ISE-SMILE/corral/internal/pkg/corfs"
 	humanize "github.com/dustin/go-humanize"
@@ -28,6 +32,14 @@ type Job struct {
 
 	bytesRead    int64
 	bytesWritten int64
+
+	activationLog chan taskResult
+}
+
+func (j *Job) collectActivation(result taskResult){
+	if j.activationLog != nil{
+		j.activationLog <- result
+	}
 }
 
 // Logic for running a single map task
@@ -226,11 +238,52 @@ func (j *Job) inputSplits(inputs []string, maxSplitSize int64) []inputSplit {
 	return splits
 }
 
+func (j *Job) done()  {
+	if j.activationLog != nil{
+		close(j.activationLog)
+	}
+}
+
+func (j *Job) writeActivationLog() {
+	logName := fmt.Sprintf("activation_%s.log",time.Now().Format("2020_01_02"))
+	logFile, err := os.OpenFile(logName, os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil{
+		log.Errorf("failed to open activation log @ %s - %f",logName,err)
+		return
+	}
+	writer := bufio.NewWriter(logFile)
+	logWriter := csv.NewWriter(writer)
+	defer logFile.Close()
+	//write header
+	logWriter.Write([]string{"JId","CId","HId","CStart","EStart","EEnd","Read","Written"})
+	for task := range j.activationLog{
+
+		logWriter.Write([]string{
+			task.JId,
+			task.CId,
+			task.HId,
+			strconv.FormatInt(task.CStart, 10),
+			strconv.FormatInt(task.EStart, 10),
+			strconv.FormatInt(task.EEnd, 10),
+			strconv.Itoa(task.BytesRead),
+			strconv.Itoa(task.BytesWritten),
+		})
+	}
+	logWriter.Flush()
+}
+
 // NewJob creates a new job from a Mapper and Reducer.
 func NewJob(mapper Mapper, reducer Reducer) *Job {
-	return &Job{
+	job := &Job{
 		Map:    mapper,
 		Reduce: reducer,
 		config: &config{},
 	}
+
+	if log.IsLevelEnabled(log.DebugLevel){
+		job.activationLog = make(chan taskResult)
+		go job.writeActivationLog()
+	}
+
+	return job
 }

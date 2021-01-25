@@ -3,16 +3,26 @@ package corwhisk
 import (
 	"bufio"
 	"encoding/base64"
-	"github.com/ISE-SMILE/corral/internal/pkg/corbuild"
-	"github.com/apache/openwhisk-client-go/whisk"
-	log "github.com/sirupsen/logrus"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/spf13/viper"
+
+	"github.com/ISE-SMILE/corral/internal/pkg/corbuild"
+	"github.com/apache/openwhisk-client-go/whisk"
+	log "github.com/sirupsen/logrus"
 )
+
+type WhiskClientApi interface {
+	Invoke(name string, payload interface{}) (io.ReadCloser, error)
+	DeployFunction(conf WhiskFunctionConfig) error
+	DeleteFunction(name string) error
+}
 
 type WhiskClient struct {
 	Client *whisk.Client
@@ -28,7 +38,7 @@ var propsPath string
 
 func init() {
 	home, err := os.UserHomeDir()
-	if err != nil {
+	if err == nil {
 		propsPath = filepath.Join(home, ".wskprops")
 	} else {
 		//best effort this will prop. work on unix and osx ;)
@@ -74,15 +84,25 @@ func whiskClient() (*whisk.Client, error) {
 	var token string
 	var namespace = "_"
 
+	//TODO: Document the order of credential lookup...
 	//1. check if wskprops exsist
-	if stat, err := os.Stat(propsPath); err == nil {
+	if _, err := os.Stat(propsPath); err == nil {
 		//2. attempt to read and parse props
-		if props, err := os.Open(stat.Name()); err == nil {
+		if props, err := os.Open(propsPath); err == nil {
 			host, token, namespace = setAtuhFromProps(readProps(props))
 		}
 		//fallback try to check the env for token
 	} else {
 		host, token, namespace = setAtuhFromProps(readEnviron())
+	}
+
+	//Okay check viper last
+	if host == "" {
+		host = viper.GetString("whiskHost")
+	}
+
+	if token == "" {
+		token = viper.GetString("whiskToken")
 	}
 
 	if token == "" {
@@ -91,12 +111,13 @@ func whiskClient() (*whisk.Client, error) {
 
 	baseurl, _ := whisk.GetURLBase(host, "/api")
 	clientConfig := &whisk.Config{
-		AuthToken:        token,
 		Namespace:        namespace,
+		AuthToken:        token,
+		Host:             host,
 		BaseURL:          baseurl,
 		Version:          "v1",
+		Verbose:          true,
 		Insecure:         true,
-		Host:             host,
 		UserAgent:        "Golang/Smile cli",
 		ApigwAccessToken: "Dummy Token",
 	}
@@ -140,29 +161,34 @@ const MaxRetries = 3
 func NewWhiskClient() *WhiskClient {
 	client, err := whiskClient()
 	if err != nil {
-		log.Errorf("could not init whisk client - %+v", err)
+		panic(fmt.Errorf("could not init whisk client - %+v", err))
 	}
+	client.Verbose = true
+	client.Debug = true
+
 	return &WhiskClient{
 		Client: client,
 	}
 }
 
-type whiskPayload struct {
-	value interface{}        `json:"value"`
-	env   map[string]*string `json:"env"`
+type WhiskPayload struct {
+	Value interface{}        `json:"value"`
+	Env   map[string]*string `json:"env"`
 }
 
 func (l *WhiskClient) Invoke(name string, payload interface{}) (io.ReadCloser, error) {
-	invocation := whiskPayload{
-		value: payload,
-		env:   make(map[string]*string),
+	invocation := WhiskPayload{
+		Value: payload,
+		Env:   make(map[string]*string),
 	}
 
-	corbuild.InjectConfiguration(invocation.env)
+	corbuild.InjectConfiguration(invocation.Env)
+	strBool := "true"
+	invocation.Env["OW_DEBUG"] = &strBool
 
 	invoke, response, err := l.Client.Actions.Invoke(name, invocation, true, true)
 	if err != nil {
-		log.Debugf("failed to invoke %s with %+v", name, payload)
+		log.Debugf("failed to invoke %s with %+v  %+v %+v", name, payload,invoke,response)
 		return nil, err
 	}
 
@@ -191,7 +217,7 @@ func getQualifiedName(functioname string) (string, string) {
 
 }
 
-func (l WhiskClient) DeployFunction(conf WhiskFunctionConfig) error {
+func (l *WhiskClient) DeployFunction(conf WhiskFunctionConfig) error {
 
 	actionName, namespace := getQualifiedName(conf.FunctionName)
 
@@ -203,7 +229,7 @@ func (l WhiskClient) DeployFunction(conf WhiskFunctionConfig) error {
 		conf.Timeout = int(time.Second * 30)
 	}
 
-	buildPackage, err := corbuild.BuildPackage()
+	buildPackage, err := corbuild.BuildPackage("exec")
 
 	if err != nil {
 		log.Debugf("failed to build package cause:+%v", err)
@@ -214,6 +240,7 @@ func (l WhiskClient) DeployFunction(conf WhiskFunctionConfig) error {
 
 	action.Name = actionName
 	action.Namespace = namespace
+
 	action.Limits = &whisk.Limits{
 		Timeout:     &conf.Timeout,
 		Memory:      &conf.Memory,
@@ -221,12 +248,14 @@ func (l WhiskClient) DeployFunction(conf WhiskFunctionConfig) error {
 		Concurrency: nil,
 	}
 	payload := base64.StdEncoding.EncodeToString(buildPackage)
+
+	var binary = true
 	action.Exec = &whisk.Exec{
 		Kind:       "go:1.15",
 		Code:       &payload,
-		Main:       "Main",
+		Main:       "main",
 		Components: nil,
-		Binary:     nil,
+		Binary:     &binary,
 	}
 	action, _, err = l.Client.Actions.Insert(action, true)
 

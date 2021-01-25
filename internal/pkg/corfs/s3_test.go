@@ -11,9 +11,6 @@ import (
 )
 
 func skipOnMissingBucket(t *testing.T) {
-	if testing.Short() {
-		t.SkipNow()
-	}
 	bucket := os.Getenv("AWS_TEST_BUCKET")
 	if bucket == "" {
 		t.Skip("No test bucket is set under $AWS_TEST_BUCKET")

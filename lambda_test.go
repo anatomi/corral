@@ -1,10 +1,10 @@
 package corral
 
 import (
-	"context"
 	"encoding/json"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/spf13/viper"
 
@@ -49,15 +49,39 @@ func TestHandleRequest(t *testing.T) {
 	job.bytesWritten = 20
 
 	lambdaDriver = NewDriver(job)
+	lambdaDriver.runtimeID = "foo"
+	lambdaDriver.Start = time.Time{}
 
-	output, err := handleRequest(context.Background(), testTask)
+	mockTaskResult := taskResult{
+		BytesRead:    0,
+		BytesWritten: 0,
+		Log:          "",
+		HId:          "test",
+		CId:          lambdaDriver.runtimeID,
+		JId:          "0_0",//phase_bin
+		CStart:       lambdaDriver.Start.Unix(),
+		EStart:       0,
+		EEnd:         0,
+	}
+
+	output, err := handle(lambdaDriver,mockHostID)(testTask)
 	assert.Nil(t, err)
-	assert.Equal(t, "{\"BytesRead\":0,\"BytesWritten\":0}", output)
+	output.EStart = 0
+	output.EEnd = 0
+	assert.Equal(t, mockTaskResult, output)
 
 	testTask.Phase = ReducePhase
-	output, err = handleRequest(context.Background(), testTask)
+	mockTaskResult.JId = "1_0"
+	output, err = handle(lambdaDriver,mockHostID)(testTask)
+
 	assert.Nil(t, err)
-	assert.Equal(t, "{\"BytesRead\":0,\"BytesWritten\":0}", output)
+	output.EStart = 0
+	output.EEnd = 0
+	assert.Equal(t, mockTaskResult, output)
+}
+
+func mockHostID() string {
+	return "test"
 }
 
 type mockLambdaClient struct {

@@ -3,12 +3,15 @@ package corfs
 import (
 	"errors"
 	"fmt"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	log "github.com/sirupsen/logrus"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	log "github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -17,20 +20,37 @@ import (
 	"github.com/mattetti/filebuffer"
 )
 
+var validMinioSchemes = map[string]bool{
+	"s3":    true,
+	"minio": true,
+}
+
 // S3FileSystem abstracts AWS S3 as a filesystem
 type MinioFileSystem struct {
 	s3Client    *s3.S3
 	objectCache *lru.Cache
 }
 
+func parseMinioUrl(uri string) (*url.URL, error) {
+	parsed, err := parseURIWithMap(uri,validMinioSchemes)
+	if err != nil {
+		return nil, err
+	}
+	parsed.Scheme = "s3"
+
+	return parsed,nil
+}
+
 // ListFiles lists files that match pathGlob.
 func (s *MinioFileSystem) ListFiles(pathGlob string) ([]FileInfo, error) {
 	s3Files := make([]FileInfo, 0)
 
-	parsed, err := parseS3URI(pathGlob)
+	parsed, err := parseMinioUrl(pathGlob)
 	if err != nil {
 		return nil, err
 	}
+	//fixing the shema ...
+	pathGlob = strings.Replace(pathGlob,"minio","s3",1)
 
 	baseURI := parsed.Path
 	if globRegex.MatchString(parsed.Path) {
@@ -76,7 +96,7 @@ func (s *MinioFileSystem) ListFiles(pathGlob string) ([]FileInfo, error) {
 // OpenReader opens a reader to the file at filePath. The reader
 // is initially seeked to "startAt" bytes into the file.
 func (s *MinioFileSystem) OpenReader(filePath string, startAt int64) (io.ReadCloser, error) {
-	parsed, err := parseS3URI(filePath)
+	parsed, err := parseMinioUrl(filePath)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +120,7 @@ func (s *MinioFileSystem) OpenReader(filePath string, startAt int64) (io.ReadClo
 
 // OpenWriter opens a writer to the file at filePath.
 func (s *MinioFileSystem) OpenWriter(filePath string) (io.WriteCloser, error) {
-	parsed, err := parseS3URI(filePath)
+	parsed, err := parseMinioUrl(filePath)
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +145,7 @@ func (s *MinioFileSystem) Stat(filePath string) (FileInfo, error) {
 		}, nil
 	}
 
-	parsed, err := parseS3URI(filePath)
+	parsed, err := parseMinioUrl(filePath)
 	if err != nil {
 		return FileInfo{}, err
 	}
@@ -155,15 +175,19 @@ func (s *MinioFileSystem) Stat(filePath string) (FileInfo, error) {
 // Init initializes the filesystem.
 func (s *MinioFileSystem) Init() error {
 	os.Setenv("AWS_SDK_LOAD_CONFIG", "true")
+
 	var endpoint string
 	if host := os.Getenv("MINIO_HOST"); host != "" {
 		endpoint = host
 	} else if host := os.Getenv("__OW_MINIO_HOST"); host != "" {
 		endpoint = host
-	} else {
+	} else if endpoint == "" {
+		endpoint = viper.GetString("minioHost")
+	} else if endpoint == "" {
 		log.Error("could not minio determine endpoint")
 		return fmt.Errorf("MINIO_ENDPOINT not set in env %+v", os.Environ())
 	}
+
 	// Configure to use MinIO Server
 	s3Config := &aws.Config{
 		Credentials: credentials.NewChainCredentials([]credentials.Provider{
@@ -175,17 +199,25 @@ func (s *MinioFileSystem) Init() error {
 					"secret": "MINIO_KEY",
 				},
 			},
+			&credentials.StaticProvider{
+				Value: credentials.Value{
+					AccessKeyID:     viper.GetString("minioUser"),
+					SecretAccessKey: viper.GetString("minioKey"),
+				},
+			},
 		}),
 		Endpoint:         &endpoint,
 		Region:           aws.String("us-east-1"),
 		DisableSSL:       aws.Bool(true),
 		S3ForcePathStyle: aws.Bool(true),
 	}
-	newSession, err := session.NewSession(s3Config)
-	if err != nil {
-		log.Errorf("failed to create minio session %+v", err)
-		return err
+
+	if log.IsLevelEnabled(log.DebugLevel) {
+		s3Config.WithCredentialsChainVerboseErrors(true)
 	}
+
+	//fail fast!
+	newSession := session.Must(session.NewSession(s3Config))
 	s.s3Client = s3.New(newSession)
 
 	s.objectCache, _ = lru.New(10000)
@@ -247,27 +279,21 @@ func NewPrefixEnvCredentials(prefix string) *credentials.Credentials {
 func (e *PrefixEnvProvider) Retrieve() (credentials.Value, error) {
 	e.retrieved = false
 
-	id := os.Getenv(e.prefix + "AWS_ACCESS_KEY_ID")
-	if id == "" {
-		id = os.Getenv(e.prefix + "AWS_ACCESS_KEY")
-	} else if id == "" {
-		if id_key := os.Getenv(e.extraKeys["id"]); id_key != "" {
-			id = id_key
-		} else if id_key := os.Getenv(e.prefix + e.extraKeys["id"]); id_key != "" {
-			id = id_key
+	ids := []string{e.prefix + "AWS_ACCESS_KEY_ID",e.prefix + "AWS_ACCESS_KEY"}
+	secrets := []string{e.prefix + "AWS_SECRET_ACCESS_KEY",e.prefix + "AWS_SECRET_KEY"}
+	if e.extraKeys != nil{
+		if key,ok := e.extraKeys["id"];ok {
+			ids = append(ids,key)
+			ids = append(ids,e.prefix+key)
+		}
+		if key,ok := e.extraKeys["secret"];ok {
+			secrets = append(secrets,key)
+			secrets = append(secrets,e.prefix+key)
 		}
 	}
 
-	secret := os.Getenv(e.prefix + "AWS_SECRET_ACCESS_KEY")
-	if secret == "" {
-		secret = os.Getenv(e.prefix + "AWS_SECRET_KEY")
-	} else if id == "" {
-		if secretv := os.Getenv(e.extraKeys["secret"]); secretv != "" {
-			secret = secretv
-		} else if secretv := os.Getenv(e.prefix + e.extraKeys["secret"]); secretv != "" {
-			secret = secretv
-		}
-	}
+	id := lookupEnvFromKeys(ids)
+	secret := lookupEnvFromKeys(secrets)
 
 	if id == "" {
 		return credentials.Value{ProviderName: credentials.EnvProviderName}, credentials.ErrAccessKeyIDNotFound
@@ -289,4 +315,14 @@ func (e *PrefixEnvProvider) Retrieve() (credentials.Value, error) {
 // IsExpired returns if the credentials have been retrieved.
 func (e *PrefixEnvProvider) IsExpired() bool {
 	return !e.retrieved
+}
+
+func lookupEnvFromKeys(keys []string) string{
+	for _,key := range keys {
+		_id := os.Getenv(key)
+		if _id != ""{
+			return _id
+		}
+	}
+	return ""
 }

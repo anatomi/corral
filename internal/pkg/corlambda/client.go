@@ -69,7 +69,7 @@ func (l *LambdaClient) updateFunctionSettings(function *FunctionConfig) error {
 
 // DeployFunction deploys the current directory as a lamba function
 func (l *LambdaClient) DeployFunction(function *FunctionConfig) error {
-	functionCode, err := corbuild.BuildPackage()
+	functionCode, err := corbuild.BuildPackage("main")
 	if err != nil {
 		panic(err)
 	}

@@ -34,6 +34,8 @@ func crossCompile(binName string) (string, error) {
 	cmd := exec.Command("go", args...)
 
 	cmd.Env = append(os.Environ(), "GOOS=linux")
+	cmd.Env = append(os.Environ(), "GOARCH=amd64")
+	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 
 	combinedOut, err := cmd.CombinedOutput()
 	if err != nil {
@@ -45,7 +47,7 @@ func crossCompile(binName string) (string, error) {
 
 // buildPackage builds the current directory as a lambda package.
 // It returns a byte slice containing a compressed binary that can be upload to lambda.
-func BuildPackage() ([]byte, error) {
+func BuildPackage(mainFnName string) ([]byte, error) {
 	log.Info("Building function")
 	binFile, err := crossCompile("lambda_artifact")
 	if err != nil {
@@ -62,7 +64,7 @@ func BuildPackage() ([]byte, error) {
 	zipBuf := new(bytes.Buffer)
 	archive := zip.NewWriter(zipBuf)
 	header := &zip.FileHeader{
-		Name:           "main",
+		Name:           mainFnName,
 		ExternalAttrs:  (0777 << 16), // File permissions
 		CreatorVersion: (3 << 8),     // Magic number indicating a Unix creator
 	}
@@ -78,11 +80,37 @@ func BuildPackage() ([]byte, error) {
 		return nil, err
 	}
 
-	defer binReader.Close()
-	defer archive.Close()
+	//In case we are building an openwhisk package...
+	data := []byte("openwhisk/action-golang-v1.15\n")
+	header = &zip.FileHeader{
+		Name:               "exec.env",
+		UncompressedSize64: uint64(len(data)),
+		Method:             zip.Deflate,
+	}
+
+	writer, err = archive.CreateHeader(header)
+	if err != nil {
+		return nil, err
+	}
+	_, err = io.Copy(writer, bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	binReader.Close()
+	archive.Close()
 
 	log.Debugf("Final zipped function binary size: %s", humanize.Bytes(uint64(len(zipBuf.Bytes()))))
-	return zipBuf.Bytes(), nil
+	data = zipBuf.Bytes()
+	if log.IsLevelEnabled(log.DebugLevel){
+		f,err := ioutil.TempFile("","")
+		if err == nil{
+			_,_ = f.Write(data)
+			_ = f.Close()
+			log.Debugf("deployment package at %s",f.Name())
+		}
+	}
+
+	return data, nil
 }
 
 func InjectConfiguration(env map[string]*string) {

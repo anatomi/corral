@@ -30,4 +30,13 @@ type task struct {
 type taskResult struct {
 	BytesRead    int
 	BytesWritten int
+
+	Log 		 string
+
+	HId string `json:"HId"` //host identifier
+	CId string `json:"CId"` //runtime identifier
+	JId string `json:"JId"` //job identifier
+	CStart int64 `json:"cStart"` //start of runtime
+	EStart int64 `json:"eStart"` //start of request
+	EEnd int64 `json:"eEnd"` //end of request
 }

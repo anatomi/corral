@@ -1,10 +1,10 @@
-# 🐎 corral
+# 🐎 corral++
 
 > Serverless MapReduce
 
-[![Build Status](https://travis-ci.org/bcongdon/corral.svg?branch=master)](https://travis-ci.org/bcongdon/corral)
+> This fork added an OpenWhisk backend and the ability to use Minio.io instad of S3. Also this repo uses go modules for easier compileing ;)
+
 [![Go Report Card](https://goreportcard.com/badge/github.com/ISE-SMILE/corral)](https://goreportcard.com/report/github.com/ISE-SMILE/corral)
-[![codecov](https://codecov.io/gh/bcongdon/corral/branch/master/graph/badge.svg)](https://codecov.io/gh/bcongdon/corral)
 [![GoDoc](https://godoc.org/github.com/ISE-SMILE/corral?status.svg)](https://godoc.org/github.com/ISE-SMILE/corral)
 
 <p align="center">
@@ -28,25 +28,31 @@ More details about corral's internals can be found in [this blog post](https://b
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 
 
-- [Examples](#examples)
-- [Deploying in Lambda](#deploying-in-lambda)
-  - [AWS Credentials](#aws-credentials)
-- [Configuration](#configuration)
-  - [Configuration Settings](#configuration-settings)
-    - [Framework Settings](#framework-settings)
-    - [Lambda Settings](#lambda-settings)
-  - [Command Line Flags](#command-line-flags)
-  - [Environment Variables](#environment-variables)
-  - [Config Files](#config-files)
-- [Architecture](#architecture)
-  - [Input Files / Splits](#input-files--splits)
-  - [Mappers](#mappers)
-  - [Partition / Shuffle](#partition--shuffle)
-  - [Reducers / Output](#reducers--output)
-- [Contributing](#contributing)
-  - [Running Tests](#running-tests)
-- [License](#license)
-- [Previous Work / Attributions](#previous-work--attributions)
+- [🐎 corral++](#-corral)
+  - [**Contents:**](#contents)
+  - [Examples](#examples)
+  - [Deploying in Lambda](#deploying-in-lambda)
+    - [AWS Credentials](#aws-credentials)
+  - [Configuration](#configuration)
+    - [Configuration Settings](#configuration-settings)
+      - [Framework Settings](#framework-settings)
+      - [Platform Settings](#platform-settings)
+      - [Lambda Settings](#lambda-settings)
+      - [OpenWhisk Settings](#openwhisk-settings)
+      - [Minio Settings](#minio-settings)
+    - [Command Line Flags](#command-line-flags)
+    - [Environment Variables](#environment-variables)
+    - [Config Files](#config-files)
+  - [Architecture](#architecture)
+    - [Execution Path](#execution-path)
+    - [Input Files / Splits](#input-files--splits)
+    - [Mappers](#mappers)
+    - [Partition / Shuffle](#partition--shuffle)
+    - [Reducers / Output](#reducers--output)
+  - [Contributing](#contributing)
+    - [Running Tests](#running-tests)
+  - [License](#license)
+  - [Previous Work / Attributions](#previous-work--attributions)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -55,6 +61,16 @@ More details about corral's internals can be found in [this blog post](https://b
 Every good MapReduce framework needs a WordCount™ example. Here's how to write a "word count" in corral:
 
 ```golang
+import (
+	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
+
+	"github.com/ISE-SMILE/corral"
+)
+
+
 type wordCount struct{}
 
 func (w wordCount) Map(key, value string, emitter corral.Emitter) {
@@ -93,7 +109,7 @@ We can also input/output to S3 by pointing to an S3 bucket/files for input/outpu
 go run word_count.go --out s3://my-output-bucket/ s3://my-input-bucket/*
 ```
 
-More comprehensive examples can be found in [the examples folder](https://github.com/ISE-SMILE/corral/tree/master/examples).
+More comprehensive examples can be found in [the examples folder](https://github.com/bcongdon/corral/examples).
 
 ## Deploying in Lambda
 
@@ -105,12 +121,12 @@ No formal deployment step needs run to deploy a corral application to Lambda. In
 
 For example, 
 ```
-./word_count --lambda s3://my-input-bucket/* --out s3://my-output-bucket
+./word_count --backend lambda s3://my-input-bucket/* --out s3://my-output-bucket
 ```
 
-Note that you must use `s3` for input/output directories, as local data files will not be present in the Lambda environment.
+Note that you must use `s3` or `minio` for input/output directories, as local data files will not be present in the Lambda environment.
 
-**NOTE**: Due to the fact that corral recompiles application code to target Lambda, invocation of the command with the `--lambda` flag must be done in the root directory of your application's source code.
+**NOTE**: Due to the fact that corral recompiles application code to target Lambda, invocation of the command with the `--backend lambda` flag must be done in the root directory of your application's source code.
 
 ### AWS Credentials
 
@@ -158,6 +174,10 @@ Below are the config settings that may be changed.
 * `lambdaManageRole` (bool) - Whether corral should manage creating an IAM role for Lambda execution. (Default: `true`)
 * `lambdaRoleARN` (string) - If `lambdaManageRole` is disabled, the ARN specified in `lambdaRoleARN` is used as the Lambda function's executor role.
 
+#### OpenWhisk Settings
+* `whiskHost` (string) - The host for OpenWhisk, including protocol and port.
+* `whiskToken` (string) - The authentication token for OpenWhisk.
+
 #### Minio Settings
 * `minioHost` (string) - The address of the minio server, this will be injected into the function code at runtime.
 * `minioUser` (string) - The user for the minio account
@@ -194,6 +214,14 @@ Below is a high-level diagram describing the MapReduce architecture corral uses.
 
 <p align="center">
     <img src="img/architecture.svg" width="80%"/>
+</p>
+
+### Execution Path
+In case you want to extend corral to other FaaS platfroms, you can extend the `corral.platfrom` interface and than extend the driver. Since the same executable runs locally to drive each execution and on the FaaS provider you have to implement the exeution path carefuly. See the execution path diagram below:
+
+
+<p align="center">
+    <img src="img/execution_path.png" width="80%" style="background-color: white;"/>
 </p>
 
 ### Input Files / Splits
@@ -254,7 +282,7 @@ The main corral has TravisCI setup. If you fork this repo, you can enable Travis
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details
 
 ## Previous Work / Attributions
-
+- [corral](https://github.com/bcongdon/corral) - The original! If you just need AWS and S3 use it instead ;)
 - [lambda-refarch-mapreduce](https://github.com/awslabs/lambda-refarch-mapreduce) - Python/Node.JS reference MapReduce Architecture
     - Uses a "recursive" style reducer instead of parallel reducers
     - Requires that all reducer output can fit in memory of a single lambda function

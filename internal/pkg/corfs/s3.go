@@ -32,21 +32,7 @@ type S3FileSystem struct {
 }
 
 func parseS3URI(uri string) (*url.URL, error) {
-	parsed, err := url.Parse(uri)
-
-	if _, ok := validS3Schemes[parsed.Scheme]; !ok {
-		return nil, fmt.Errorf("Invalid s3 scheme: '%s'", parsed.Scheme)
-	}
-
-	// if !strings.Contains(parsed.Path, "/") {
-	// 	return nil, fmt.Errorf("Invalid s3 url: '%s'", uri)
-	// }
-
-	if strings.HasPrefix(parsed.Path, "/") {
-		parsed.Path = parsed.Path[1:]
-	}
-
-	return parsed, err
+	return parseURIWithMap(uri,validS3Schemes)
 }
 
 // ListFiles lists files that match pathGlob.

@@ -3,9 +3,11 @@ package corral
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"os"
 	"runtime"
 	"runtime/pprof"
+	"strings"
 	"sync"
 	"time"
 
@@ -23,11 +25,20 @@ import (
 	flag "github.com/spf13/pflag"
 )
 
+var src rand.Source;
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+	src = rand.NewSource(time.Now().UnixNano())
+}
+
 // Driver controls the execution of a MapReduce Job
 type Driver struct {
-	jobs     []*Job
-	config   *config
-	executor executor
+	jobs      []*Job
+	config    *config
+	executor  executor
+	runtimeID string
+	Start     time.Time
 }
 
 // config configures a Driver's execution of jobs
@@ -67,6 +78,7 @@ func NewDriver(job *Job, options ...Option) *Driver {
 	d := &Driver{
 		jobs:     []*Job{job},
 		executor: localExecutor{},
+		runtimeID: RandomName(),
 	}
 
 	c := newConfig()
@@ -177,12 +189,16 @@ func (d *Driver) runReducePhase(job *Job, jobNumber int) {
 }
 
 func (d *Driver) runOnCloudPlatfrom() bool {
-	if runningInLambda() || runningInWhisk() {
-		if lBackend, ok := d.executor.(platform); ok {
-			//THis blocks thus in a cloud enviroment e.g. the deplyed function this is whats executed, this is mindfunc 3000x
-			lBackend.Start(d)
-			return true
-		}
+	if runningInLambda() {
+		log.Debug(">>>Running on AWS Lambda>>>")
+		//XXX this is sub-optimal (in case we need to init this struct we have to come up with a different strategy ;)
+		(&lambdaExecutor{}).Start(d)
+		return true
+	}
+	if runningInWhisk() {
+		log.Debug(">>>Running on OpenWhisk or IBM>>>")
+		(&whiskExecutor{}).Start(d)
+		return true
 	}
 
 	return false
@@ -191,7 +207,8 @@ func (d *Driver) runOnCloudPlatfrom() bool {
 // run starts the Driver
 func (d *Driver) run() {
 	if d.runOnCloudPlatfrom() {
-		log.Info("Running on FaaS runtime")
+		log.Warn("Running on FaaS runtime and Returned, this is bad!")
+		os.Exit(-10)
 	}
 
 	//TODO introduce interface for deploy/undeploy
@@ -202,6 +219,7 @@ func (d *Driver) run() {
 
 	if len(d.config.Inputs) == 0 {
 		log.Error("No inputs!")
+		log.Error(os.Environ())
 		return
 	}
 
@@ -227,6 +245,8 @@ func (d *Driver) run() {
 
 		log.Infof("Job %d - Total Bytes Read:\t%s", idx, humanize.Bytes(uint64(job.bytesRead)))
 		log.Infof("Job %d - Total Bytes Written:\t%s", idx, humanize.Bytes(uint64(job.bytesWritten)))
+
+		job.done()
 	}
 }
 
@@ -241,13 +261,14 @@ var undeploy = flag.Bool("undeploy", false, "Undeploy the Lambda function and IA
 
 // Main starts the Driver, running the submitted jobs.
 func (d *Driver) Main() {
-	if viper.GetBool("verbose") {
+	//log.SetLevel(log.DebugLevel)
+	if viper.GetBool("verbose") || *verbose {
 		log.SetLevel(log.DebugLevel)
 	}
 
 	if *undeploy {
 		//TODO: this is a shitty interface/abstraction
-		if backendFlag != nil {
+		if backendFlag == nil {
 			panic("missing backend flag!")
 		}
 		if *backendFlag == "lambda" {
@@ -290,3 +311,31 @@ func (d *Driver) Main() {
 		f.Close()
 	}
 }
+
+
+const letterBytes = "abcdef0123456789-_"
+const (
+	letterIdxBits = 6                    // 6 bits to represent a letter index
+	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
+	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
+)
+
+func RandomName() string {
+	sb := strings.Builder{}
+	sb.Grow(10)
+	// A src.Int63() generates 63 random bits, enough for letterIdxMax characters!
+	for i, cache, remain := 9, src.Int63(), letterIdxMax; i >= 0; {
+		if remain == 0 {
+			cache, remain = src.Int63(), letterIdxMax
+		}
+		if idx := int(cache & letterIdxMask); idx < len(letterBytes) {
+			sb.WriteByte(letterBytes[idx])
+			i--
+		}
+		cache >>= letterIdxBits
+		remain--
+	}
+
+	return sb.String()
+}
+

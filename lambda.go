@@ -1,13 +1,14 @@
 package corral
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
-	"runtime/debug"
 	"strconv"
+	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/aws/aws-lambda-go/lambda"
 	log "github.com/sirupsen/logrus"
@@ -36,41 +37,44 @@ func runningInLambda() bool {
 	return true
 }
 
-func prepareResult(job *Job) string {
-	result := taskResult{
-		BytesRead:    int(job.bytesRead),
-		BytesWritten: int(job.bytesWritten),
+var lambdaNodeName string
+
+func lambdaHostID() string{
+	if lambdaNodeName != ""{
+		return lambdaNodeName
 	}
 
-	payload, _ := json.Marshal(result)
-	return string(payload)
+	f,err := os.Open("/proc/self/cgroup")
+	defer f.Close()
+	if err == nil {
+		reader := bufio.NewScanner(f)
+		for reader.Scan(){
+			line := reader.Text()
+			if strings.Contains(line,"cpu") {
+				lambdaNodeName = line
+				return lambdaNodeName
+			}
+		}
+	}
+
+	uptime := readUptime()
+	if uptime != "" {
+		lambdaNodeName = uptime
+		return lambdaNodeName
+	}
+
+	lambdaNodeName = "unknown"
+	return lambdaNodeName
 }
 
-//TODO: prob. need to lift this into its own interface/abstraction
 func handleRequest(ctx context.Context, task task) (string, error) {
-	// Precaution to avoid running out of memory for reused Lambdas
-	debug.FreeOSMemory()
-
-	// Setup current job
-	fs := corfs.InitFilesystem(task.FileSystemType)
-	currentJob := lambdaDriver.jobs[task.JobNumber]
-	currentJob.fileSystem = fs
-	currentJob.intermediateBins = task.IntermediateBins
-	currentJob.outputPath = task.WorkingLocation
-	currentJob.config.Cleanup = task.Cleanup
-
-	// Need to reset job counters in case this is a reused lambda
-	currentJob.bytesRead = 0
-	currentJob.bytesWritten = 0
-
-	if task.Phase == MapPhase {
-		err := currentJob.runMapper(task.BinID, task.Splits)
-		return prepareResult(currentJob), err
-	} else if task.Phase == ReducePhase {
-		err := currentJob.runReducer(task.BinID)
-		return prepareResult(currentJob), err
+	result,err := handle(lambdaDriver,lambdaHostID)(task)
+	if err != nil{
+		return "",err
+	} else {
+		payload, _ := json.Marshal(result)
+		return string(payload),nil
 	}
-	return "", fmt.Errorf("Unknown phase: %d", task.Phase)
 }
 
 type lambdaExecutor struct {
@@ -101,6 +105,7 @@ func loadTaskResult(payload []byte) taskResult {
 
 func (l *lambdaExecutor) Start(d *Driver) {
 	lambdaDriver = d
+	d.Start = time.Now()
 	log.Info("called Start")
 	lambda.Start(handleRequest)
 }
@@ -112,7 +117,7 @@ func (l *lambdaExecutor) RunMapper(job *Job, jobNumber int, binID uint, inputSpl
 		BinID:            binID,
 		Splits:           inputSplits,
 		IntermediateBins: job.intermediateBins,
-		FileSystemType:   corfs.S3,
+		FileSystemType:   corfs.FilesystemType(job.fileSystem),
 		WorkingLocation:  job.outputPath,
 	}
 	payload, err := json.Marshal(mapTask)
@@ -123,6 +128,7 @@ func (l *lambdaExecutor) RunMapper(job *Job, jobNumber int, binID uint, inputSpl
 	resultPayload, err := l.Invoke(l.functionName, payload)
 	taskResult := loadTaskResult(resultPayload)
 
+	job.collectActivation(taskResult)
 	atomic.AddInt64(&job.bytesRead, int64(taskResult.BytesRead))
 	atomic.AddInt64(&job.bytesWritten, int64(taskResult.BytesWritten))
 
@@ -134,7 +140,7 @@ func (l *lambdaExecutor) RunReducer(job *Job, jobNumber int, binID uint) error {
 		JobNumber:       jobNumber,
 		Phase:           ReducePhase,
 		BinID:           binID,
-		FileSystemType:  corfs.S3,
+		FileSystemType:  corfs.FilesystemType(job.fileSystem),
 		WorkingLocation: job.outputPath,
 		Cleanup:         job.config.Cleanup,
 	}
@@ -146,6 +152,7 @@ func (l *lambdaExecutor) RunReducer(job *Job, jobNumber int, binID uint) error {
 	resultPayload, err := l.Invoke(l.functionName, payload)
 	taskResult := loadTaskResult(resultPayload)
 
+	job.collectActivation(taskResult)
 	atomic.AddInt64(&job.bytesRead, int64(taskResult.BytesRead))
 	atomic.AddInt64(&job.bytesWritten, int64(taskResult.BytesWritten))
 

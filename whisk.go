@@ -5,13 +5,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/ISE-SMILE/corral/internal/pkg/corwhisk"
 	"io"
 	"io/ioutil"
 	"os"
-	"runtime/debug"
 	"strings"
 	"sync/atomic"
+
+	"github.com/ISE-SMILE/corral/internal/pkg/corwhisk"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
@@ -23,9 +23,8 @@ var (
 	whiskDriver *Driver
 )
 
-// runningInLambda infers if the program is running in AWS lambda via inspection of the environment
 func runningInWhisk() bool {
-	expectedEnvVars := []string{"__OW_API_KEY", "__OW_API_HOST"}
+	expectedEnvVars := []string{"__OW_EXECUTION_ENV", "__OW_API_HOST"}
 	for _, envVar := range expectedEnvVars {
 		if os.Getenv(envVar) == "" {
 			return false
@@ -34,49 +33,49 @@ func runningInWhisk() bool {
 	return true
 }
 
-//TODO: prob. need to lift this into its own interface/abstraction
-func handleWhsikRequest(task task) (taskResult, error) {
-	// Precaution to avoid running out of memory for reused Lambdas
-	debug.FreeOSMemory()
+var whiskNodeName string
 
-	// Setup current job
-	fs := corfs.InitFilesystem(task.FileSystemType)
-	currentJob := lambdaDriver.jobs[task.JobNumber]
-	currentJob.fileSystem = fs
-	currentJob.intermediateBins = task.IntermediateBins
-	currentJob.outputPath = task.WorkingLocation
-	currentJob.config.Cleanup = task.Cleanup
-
-	// Need to reset job counters in case this is a reused lambda
-	currentJob.bytesRead = 0
-	currentJob.bytesWritten = 0
-
-	if task.Phase == MapPhase {
-		err := currentJob.runMapper(task.BinID, task.Splits)
-		result := taskResult{
-			BytesRead:    int(currentJob.bytesRead),
-			BytesWritten: int(currentJob.bytesWritten),
-		}
-		return result, err
-	} else if task.Phase == ReducePhase {
-		err := currentJob.runReducer(task.BinID)
-		result := taskResult{
-			BytesRead:    int(currentJob.bytesRead),
-			BytesWritten: int(currentJob.bytesWritten),
-		}
-		return result, err
+func whiskHostID() string{
+	if whiskNodeName != "" {
+		return whiskNodeName
 	}
-	return taskResult{}, fmt.Errorf("Unknown phase: %d", task.Phase)
+	//there are two possible scenarios: docker direct or kubernetes...
+
+	//is only present in some upstream openwhisk builds ;)
+	if _,err := os.Stat("/vmhost"); err == nil {
+		data,err := ioutil.ReadFile("/vmhost")
+		if err == nil{
+			whiskNodeName = string(bytes.Replace(data,[]byte("\n"),[]byte(""),-1))
+			return whiskNodeName
+		}
+	}
+	if name := os.Getenv("NODENAME");name != ""{
+		whiskNodeName = name
+		return whiskNodeName
+	}
+
+	uptime := readUptime()
+	if uptime != "" {
+		whiskNodeName = uptime
+		return whiskNodeName
+	}
+
+	whiskNodeName = "unknown"
+	return whiskNodeName
+}
+
+func handleWhsikRequest(task task) (taskResult, error) {
+	return handle(whiskDriver,whiskHostID)(task)
 }
 
 type whiskExecutor struct {
-	*corwhisk.WhiskClient
+	corwhisk.WhiskClientApi
 	functionName string
 }
 
 func newWhiskExecutor(functionName string) *whiskExecutor {
 	return &whiskExecutor{
-		WhiskClient:  corwhisk.NewWhiskClient(),
+		WhiskClientApi:  corwhisk.NewWhiskClient(),
 		functionName: functionName,
 	}
 }
@@ -85,18 +84,11 @@ func newWhiskExecutor(functionName string) *whiskExecutor {
 //this implements a process execution using system in and out...
 //this is a modified version of https://github.com/apache/openwhisk-runtime-go/blob/master/examples/standalone/exec.go
 func loop() {
-	// debugging
-	var debug = os.Getenv("OW_DEBUG") != ""
+	var logBuffer bytes.Buffer
+	logFile := io.Writer(&logBuffer)
+	log.SetOutput(logFile)
+	//log.Printf("ACTION ENV: %v", os.Environ())
 
-	if debug {
-		filename := os.Getenv("OW_DEBUG")
-		f, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-		if err == nil {
-			log.SetOutput(f)
-			defer f.Close()
-		}
-		log.Printf("ACTION ENV: %v", os.Environ())
-	}
 
 	// assign the main function
 	type Action func(event task) (taskResult, error)
@@ -109,9 +101,8 @@ func loop() {
 	reader := bufio.NewReader(os.Stdin)
 
 	// read-eval-print loop
-	if debug {
-		log.Println("started")
-	}
+	//log.Println("started")
+
 	// send ack
 	// note that it depends on the runtime,
 	// go 1.13+ requires an ack, past versions does not
@@ -125,9 +116,9 @@ func loop() {
 			}
 			break
 		}
-		if debug {
-			log.Printf(">>>'%s'>>>", inbuf)
-		}
+
+		log.Printf(">>>'%s'>>>", inbuf)
+
 		// parse one line
 		var input map[string]interface{}
 		err = json.Unmarshal(inbuf, &input)
@@ -136,9 +127,9 @@ func loop() {
 			fmt.Fprintf(out, "{ error: %q}\n", err.Error())
 			continue
 		}
-		if debug {
-			log.Printf("%v\n", input)
-		}
+
+		log.Printf("%v\n", input)
+
 		// set environment variables
 		err = json.Unmarshal(inbuf, &input)
 		for k, v := range input {
@@ -149,38 +140,67 @@ func loop() {
 				os.Setenv("__OW_"+strings.ToUpper(k), s)
 			}
 		}
-		// get payload if not empty
+		var invocation corwhisk.WhiskPayload
 		var payload task
 		if value, ok := input["value"].(map[string]interface{}); ok {
-			//Ya, I know uggly but this is simpler than manual parsing of the map[]interface
 			buffer, _ := json.Marshal(value)
-			_ = json.Unmarshal(buffer, &payload)
+			err = json.Unmarshal(buffer, &invocation)
+			if err != nil{
+				log.Println(err.Error())
+				fmt.Fprintf(out, "{ error: %q}\n", err.Error())
+				continue
+			}
+			buffer, _ = json.Marshal(invocation.Value)
+			err = json.Unmarshal(buffer, &payload)
+			if err != nil{
+				log.Println(err.Error())
+				fmt.Fprintf(out, "{ error: %q}\n", err.Error())
+				continue
+			}
+			for k,v := range invocation.Env {
+				if v != nil{
+					os.Setenv("__OW_"+strings.ToUpper(k), *v)
+				}
+			}
+
 		}
 		// process the request
 		result, err := action(payload)
+
 		if err != nil {
 			log.Println(err.Error())
 			fmt.Fprintf(out, "{ error: %q}\n", err.Error())
 			continue
+		}
+		if log.IsLevelEnabled(log.DebugLevel) {
+			result.Log = logBuffer.String()
 		}
 		// encode the answer
 		output, err := json.Marshal(&result)
 		if err != nil {
-			log.Println(err.Error())
+			//log.Println(err.Error())
 			fmt.Fprintf(out, "{ error: %q}\n", err.Error())
 			continue
 		}
 		output = bytes.Replace(output, []byte("\n"), []byte(""), -1)
-		if debug {
-			log.Printf("'<<<%s'<<<", output)
+
+		log.Printf("'<<<%s'<<<", output)
+		f, err := os.OpenFile("/tmp/activation.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+		if err == nil {
+			f.Write([]byte(result.Log))
+			f.Close()
 		}
 		fmt.Fprintf(out, "%s\n", output)
+
 	}
 }
 
 func (l *whiskExecutor) Start(d *Driver) {
 	whiskDriver = d
-	loop()
+	for {
+		//can't stop won't stop
+		loop()
+	}
 }
 
 func prepareWhiskResult(payload io.ReadCloser) taskResult {
@@ -204,7 +224,7 @@ func (l *whiskExecutor) RunMapper(job *Job, jobNumber int, binID uint, inputSpli
 		BinID:            binID,
 		Splits:           inputSplits,
 		IntermediateBins: job.intermediateBins,
-		FileSystemType:   corfs.S3,
+		FileSystemType:   corfs.FilesystemType(job.fileSystem),
 		WorkingLocation:  job.outputPath,
 	}
 
@@ -215,7 +235,7 @@ func (l *whiskExecutor) RunMapper(job *Job, jobNumber int, binID uint, inputSpli
 	}
 
 	taskResult := prepareWhiskResult(resp)
-
+	job.collectActivation(taskResult)
 	atomic.AddInt64(&job.bytesRead, int64(taskResult.BytesRead))
 	atomic.AddInt64(&job.bytesWritten, int64(taskResult.BytesWritten))
 
@@ -227,7 +247,7 @@ func (l *whiskExecutor) RunReducer(job *Job, jobNumber int, binID uint) error {
 		JobNumber:       jobNumber,
 		Phase:           ReducePhase,
 		BinID:           binID,
-		FileSystemType:  corfs.S3,
+		FileSystemType:  corfs.FilesystemType(job.fileSystem),
 		WorkingLocation: job.outputPath,
 		Cleanup:         job.config.Cleanup,
 	}
@@ -238,7 +258,7 @@ func (l *whiskExecutor) RunReducer(job *Job, jobNumber int, binID uint) error {
 	}
 
 	taskResult := prepareWhiskResult(resp)
-
+	job.collectActivation(taskResult)
 	atomic.AddInt64(&job.bytesRead, int64(taskResult.BytesRead))
 	atomic.AddInt64(&job.bytesWritten, int64(taskResult.BytesWritten))
 
@@ -247,11 +267,12 @@ func (l *whiskExecutor) RunReducer(job *Job, jobNumber int, binID uint) error {
 
 func (l *whiskExecutor) Deploy() {
 	conf := corwhisk.WhiskFunctionConfig{
-		Memory:  viper.GetInt("lambdaMemory"),
-		Timeout: viper.GetInt("lambdaTimeout"),
+		FunctionName: l.functionName,
+		Memory:       viper.GetInt("lambdaMemory"),
+		Timeout:      viper.GetInt("lambdaTimeout") * 1000,
 	}
 
-	err := l.WhiskClient.DeployFunction(conf)
+	err := l.WhiskClientApi.DeployFunction(conf)
 
 	if err != nil {
 		log.Infof("failed to deploy %s - %+v", l.functionName, err)
@@ -260,7 +281,7 @@ func (l *whiskExecutor) Deploy() {
 }
 
 func (l *whiskExecutor) Undeploy() {
-	err := l.WhiskClient.DeleteFunction(l.functionName)
+	err := l.WhiskClientApi.DeleteFunction(l.functionName)
 	if err != nil {
 		log.Infof("failed to remove function %+v", err)
 	}

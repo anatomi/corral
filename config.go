@@ -1,17 +1,21 @@
 package corral
 
 import (
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 )
 
 func loadConfig() {
-	viper.SetConfigName("corralrc.yaml")
+	viper.SetConfigName("corralrc")//BUG .yaml?
 	viper.AddConfigPath(".")
 	viper.AddConfigPath("$HOME/.corral")
 
 	setupDefaults()
 
-	viper.ReadInConfig()
+	err := viper.ReadInConfig()
+	if err != nil {
+		log.Debugf("Config Read %+v", err)
+	}
 
 	viper.SetEnvPrefix("corral")
 	viper.AutomaticEnv()
