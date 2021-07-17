@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/ISE-SMILE/corral/internal/pkg/corbuild"
+	"github.com/ISE-SMILE/corral/internal/pkg/corcache"
 	"strings"
 
 	lambdaMessages "github.com/aws/aws-lambda-go/lambda/messages"
@@ -24,14 +25,21 @@ const MaxLambdaRetries = 3
 // deploying and invoking lambda functions
 type LambdaClient struct {
 	Client lambdaiface.LambdaAPI
+
+}
+
+type LambdaCacheConfigInjector interface {
+	corcache.CacheConfigIncector
+	ConfigureLambda(*lambda.CreateFunctionInput) error
 }
 
 // FunctionConfig holds the configuration of an individual Lambda function
 type FunctionConfig struct {
-	Name       string
-	RoleARN    string
-	Timeout    int64
-	MemorySize int64
+	Name                string
+	RoleARN             string
+	Timeout             int64
+	MemorySize          int64
+	CacheConfigInjector corcache.CacheConfigIncector
 }
 
 // NewLambdaClient initializes a new LambdaClient
@@ -69,7 +77,7 @@ func (l *LambdaClient) updateFunctionSettings(function *FunctionConfig) error {
 
 // DeployFunction deploys the current directory as a lamba function
 func (l *LambdaClient) DeployFunction(function *FunctionConfig) error {
-	functionCode, err := corbuild.BuildPackage("main")
+	functionCode, _, err := corbuild.BuildPackage("main")
 	if err != nil {
 		panic(err)
 	}
@@ -143,6 +151,21 @@ func (l *LambdaClient) createFunction(function *FunctionConfig, code []byte) err
 		Timeout:      aws.Int64(function.Timeout),
 		MemorySize:   aws.Int64(function.MemorySize),
 		Environment:  env,
+	}
+	
+	//we need to inject a cache config
+	if function.CacheConfigInjector != nil {
+		
+		if li,ok := function.CacheConfigInjector.(LambdaCacheConfigInjector); ok {
+			err := li.ConfigureLambda(createArgs)
+			if err != nil{
+				log.Warnf("failed to inject cache config into function")
+				return err
+			}
+		} else {
+			log.Errorf("cannot configure cache for this type of function, check the docs.")
+			return fmt.Errorf("can't deploy function without injecting cache config")
+		}
 	}
 
 	_, err := l.Client.CreateFunction(createArgs)

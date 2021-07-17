@@ -56,15 +56,16 @@ func TestHandleRequest(t *testing.T) {
 		BytesRead:    0,
 		BytesWritten: 0,
 		Log:          "",
-		HId:          "test",
+		HId:          mockHostID(),
+		RId:          mockHostID(),
 		CId:          lambdaDriver.runtimeID,
 		JId:          "0_0",//phase_bin
-		CStart:       lambdaDriver.Start.Unix(),
+		CStart:       lambdaDriver.Start.UnixNano(),
 		EStart:       0,
 		EEnd:         0,
 	}
 
-	output, err := handle(lambdaDriver,mockHostID)(testTask)
+	output, err := handle(lambdaDriver,mockHostID,mockHostID)(testTask)
 	assert.Nil(t, err)
 	output.EStart = 0
 	output.EEnd = 0
@@ -72,7 +73,7 @@ func TestHandleRequest(t *testing.T) {
 
 	testTask.Phase = ReducePhase
 	mockTaskResult.JId = "1_0"
-	output, err = handle(lambdaDriver,mockHostID)(testTask)
+	output, err = handle(lambdaDriver,mockHostID,mockHostID)(testTask)
 
 	assert.Nil(t, err)
 	output.EStart = 0

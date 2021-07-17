@@ -4,6 +4,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -103,6 +104,13 @@ func (l *LocalFileSystem) Init() error {
 func (l *LocalFileSystem) Join(elem ...string) string {
 	return filepath.Join(elem...)
 }
+
+// Join joins file path elements
+func (l *LocalFileSystem) Split(path string) []string {
+	path = filepath.Clean(path)
+	return strings.Split(path,string(filepath.Separator))
+}
+
 
 // Delete deletes the file at filePath.
 func (l *LocalFileSystem) Delete(filePath string) error {

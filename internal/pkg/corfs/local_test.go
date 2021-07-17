@@ -1,6 +1,7 @@
 package corfs
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
@@ -133,16 +134,41 @@ func TestLocalListGlob(t *testing.T) {
 	defer os.RemoveAll(tmpdir)
 	assert.Nil(t, err)
 
-	path := path.Join(tmpdir, "tmpfile")
-
-	ioutil.WriteFile(path, []byte("foo"), 0777)
+	for i := 0; i < 10; i++ {
+		path := path.Join(tmpdir, fmt.Sprintf("tmpfile%d",i))
+		ioutil.WriteFile(path, []byte("foo"), 0777)
+	}
 
 	fs := LocalFileSystem{}
 
 	files, err := fs.ListFiles(filepath.Join(tmpdir, "tmp*"))
 	assert.Nil(t, err)
-	assert.Len(t, files, 1)
+	assert.Len(t, files, 10)
 
 	assert.Equal(t, int64(3), files[0].Size)
+
+	path := path.Join(tmpdir, fmt.Sprintf("tmpfile%d",0))
 	assert.Equal(t, path, files[0].Name)
+}
+
+func TestLocalListGlobSubfolder(t *testing.T) {
+	tmpdir, err := ioutil.TempDir("", "test")
+	defer os.RemoveAll(tmpdir)
+	assert.Nil(t, err)
+
+
+	for i := 0; i < 5; i++ {
+		folder := fmt.Sprintf("foo%d",i)
+		os.Mkdir(path.Join(tmpdir, folder),0777)
+		for i := 0; i < 10; i++ {
+			path := path.Join(tmpdir, folder,fmt.Sprintf("tmpfile%d",i))
+			ioutil.WriteFile(path, []byte("foo"), 0777)
+		}
+	}
+
+	fs := LocalFileSystem{}
+
+	files, err := fs.ListFiles(filepath.Join(tmpdir, "*"))
+	assert.Nil(t, err)
+	assert.Len(t, files, 50)
 }

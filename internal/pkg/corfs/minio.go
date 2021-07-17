@@ -255,6 +255,12 @@ func (s *MinioFileSystem) Join(elem ...string) string {
 	return strings.Join(stripped, "/")
 }
 
+// Join joins file path elements
+func (s *MinioFileSystem) Split(path string) []string {
+	return strings.Split(path,"/")
+}
+
+
 // A EnvProvider retrieves credentials from the environment variables of the
 // running process. Environment credentials never expire.
 //

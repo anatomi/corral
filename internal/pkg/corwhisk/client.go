@@ -2,21 +2,28 @@ package corwhisk
 
 import (
 	"bufio"
+	"bytes"
+	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"github.com/ISE-SMILE/corral/internal/pkg/corcache"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/spf13/viper"
+	"golang.org/x/time/rate"
 
 	"github.com/ISE-SMILE/corral/internal/pkg/corbuild"
 	"github.com/apache/openwhisk-client-go/whisk"
 	log "github.com/sirupsen/logrus"
 )
+
+const MaxPullRetries = 4
 
 type WhiskClientApi interface {
 	Invoke(name string, payload interface{}) (io.ReadCloser, error)
@@ -26,12 +33,36 @@ type WhiskClientApi interface {
 
 type WhiskClient struct {
 	Client *whisk.Client
+	spawn  *rate.Limiter
+	ctx    context.Context
+	remoteLoggingHost string
+}
+
+type WhiskClientConfig struct {
+	RequestPerMinute int64
+	RequestBurstRate int
+
+	Host  string
+	Token string
+
+	Context           context.Context
+	RemoteLoggingHost string
+
+	BatchRequestFeature bool
+	MultiDeploymentFeatrue bool
+}
+
+type WhiskCacheConfigInjector interface {
+	corcache.CacheConfigIncector
+	ConfigureWhisk(action *whisk.Action) error
+
 }
 
 type WhiskFunctionConfig struct {
-	Memory       int
-	Timeout      int
-	FunctionName string
+	Memory              int
+	Timeout             int
+	FunctionName        string
+	CacheConfigInjector corcache.CacheConfigIncector
 }
 
 var propsPath string
@@ -78,31 +109,23 @@ func readEnviron() map[string]string {
 	return env
 }
 
-func whiskClient() (*whisk.Client, error) {
-	// lets first look for .wskpros otherwise use viper?
-	var host string
-	var token string
+func whiskClient(conf WhiskClientConfig) (*whisk.Client, error) {
+	// lets first check the config
+	host := conf.Host
+	token := conf.Token
 	var namespace = "_"
 
-	//TODO: Document the order of credential lookup...
-	//1. check if wskprops exsist
-	if _, err := os.Stat(propsPath); err == nil {
-		//2. attempt to read and parse props
-		if props, err := os.Open(propsPath); err == nil {
-			host, token, namespace = setAtuhFromProps(readProps(props))
-		}
-		//fallback try to check the env for token
-	} else {
-		host, token, namespace = setAtuhFromProps(readEnviron())
-	}
-
-	//Okay check viper last
-	if host == "" {
-		host = viper.GetString("whiskHost")
-	}
-
 	if token == "" {
-		token = viper.GetString("whiskToken")
+		//2. check if wskprops exsist
+		if _, err := os.Stat(propsPath); err == nil {
+			//. attempt to read and parse props
+			if props, err := os.Open(propsPath); err == nil {
+				host, token, namespace = setAtuhFromProps(readProps(props))
+			}
+			//3. fallback try to check the env for token
+		} else {
+			host, token, namespace = setAtuhFromProps(readEnviron())
+		}
 	}
 
 	if token == "" {
@@ -158,16 +181,28 @@ func setAtuhFromProps(auth map[string]string) (string, string, string) {
 const MaxRetries = 3
 
 // NewLambdaClient initializes a new LambdaClient
-func NewWhiskClient() *WhiskClient {
-	client, err := whiskClient()
+func NewWhiskClient(conf WhiskClientConfig) *WhiskClient {
+	client, err := whiskClient(conf)
 	if err != nil {
 		panic(fmt.Errorf("could not init whisk client - %+v", err))
 	}
 	client.Verbose = true
 	client.Debug = true
 
+	requestPerMinute := conf.RequestPerMinute
+	if requestPerMinute == 0 {
+		requestPerMinute = 200
+	}
+
+	requestBurstRate := conf.RequestBurstRate
+	if requestBurstRate <= 0 {
+		requestBurstRate = 5
+	}
+
 	return &WhiskClient{
 		Client: client,
+		spawn:  rate.NewLimiter(rate.Every(time.Minute/time.Duration(requestPerMinute)), requestBurstRate),
+		ctx:    context.Background(),
 	}
 }
 
@@ -184,18 +219,12 @@ func (l *WhiskClient) Invoke(name string, payload interface{}) (io.ReadCloser, e
 
 	corbuild.InjectConfiguration(invocation.Env)
 	strBool := "true"
-	invocation.Env["OW_DEBUG"] = &strBool
-
-	invoke, response, err := l.Client.Actions.Invoke(name, invocation, true, true)
-	if err != nil {
-		log.Debugf("failed to invoke %s with %+v  %+v %+v", name, payload,invoke,response)
-		return nil, err
+	invocation.Env["DEBUG"] = &strBool
+	if l.remoteLoggingHost != ""{
+		invocation.Env["RemoteLoggingHost"] = &l.remoteLoggingHost
 	}
 
-	log.Debugf("invoked %s - %d", name, response.StatusCode)
-	log.Debugf("%+v", invoke)
-
-	return response.Body, err
+	return l.tryInvoke(name, invocation)
 }
 
 // returns name and namespace based on function name
@@ -229,11 +258,20 @@ func (l *WhiskClient) DeployFunction(conf WhiskFunctionConfig) error {
 		conf.Timeout = int(time.Second * 30)
 	}
 
-	buildPackage, err := corbuild.BuildPackage("exec")
+	buildPackage, codeHashDigest, err := corbuild.BuildPackage("exec")
 
-	if err != nil {
-		log.Debugf("failed to build package cause:+%v", err)
-		return err
+	payload := base64.StdEncoding.EncodeToString(buildPackage)
+
+	act, _, err := l.Client.Actions.Get(conf.FunctionName, false)
+	if err == nil {
+		if remoteHash := act.Annotations.GetValue("codeHash"); remoteHash != nil {
+			if strings.Compare(codeHashDigest, remoteHash.(string)) == 0 {
+				log.Info("code hash equal, skipping deployment")
+				return nil
+			} else {
+				log.Debugf("code hash differ %s %s, updating", codeHashDigest, remoteHash)
+			}
+		}
 	}
 
 	action := new(whisk.Action)
@@ -247,7 +285,6 @@ func (l *WhiskClient) DeployFunction(conf WhiskFunctionConfig) error {
 		Logsize:     nil,
 		Concurrency: nil,
 	}
-	payload := base64.StdEncoding.EncodeToString(buildPackage)
 
 	var binary = true
 	action.Exec = &whisk.Exec{
@@ -257,6 +294,30 @@ func (l *WhiskClient) DeployFunction(conf WhiskFunctionConfig) error {
 		Components: nil,
 		Binary:     &binary,
 	}
+
+
+
+	//allows us to check if the deployment needs to be updated
+	hashAnnotation := whisk.KeyValue{
+		Key:   "codeHash",
+		Value: codeHashDigest,
+	}
+
+	action.Annotations = action.Annotations.AddOrReplace(&hashAnnotation)
+
+	if conf.CacheConfigInjector != nil{
+		if wi,ok := conf.CacheConfigInjector.(WhiskCacheConfigInjector); ok {
+			err := wi.ConfigureWhisk(action)
+			if err != nil{
+				log.Warnf("failed to inject cache config into function")
+				return err
+			}
+		} else {
+			log.Errorf("cannot configure cache for this type of function, check the docs.")
+			return fmt.Errorf("can't deploy function without injecting cache config")
+		}
+	}
+
 	action, _, err = l.Client.Actions.Insert(action, true)
 
 	if err != nil {
@@ -271,4 +332,92 @@ func (l *WhiskClient) DeployFunction(conf WhiskFunctionConfig) error {
 func (l *WhiskClient) DeleteFunction(name string) error {
 	_, err := l.Client.Actions.Delete(name)
 	return err
+}
+
+func (l *WhiskClient) tryInvoke(name string, invocation WhiskPayload) (io.ReadCloser, error) {
+	failures := make([]error, 0)
+	for i := 0; i < MaxRetries; i++ {
+		err := l.spawn.Wait(l.ctx)
+		if err != nil {
+			//wait canceld form the outside
+			return nil, err
+		}
+		invoke, response, err := l.Client.Actions.Invoke(name, invocation, true, true)
+
+		if response == nil && err != nil {
+			failures = append(failures, err)
+			log.Warnf("failed [%d/%d]", i, MaxRetries)
+			log.Debugf("%+v %d %+v",invoke, response.StatusCode, err)
+			continue
+		}
+
+		if response != nil {
+			log.Debugf("invoked %s - %d", name, response.StatusCode)
+			log.Debugf("%+v", invoke)
+			if response.StatusCode == 200 {
+				return response.Body, nil
+			} else if response.StatusCode == 202 {
+				if id, ok := invoke["activationId"]; ok {
+					activation, err := l.pollActivation(id.(string))
+					if err != nil {
+						failures = append(failures, err)
+					} else {
+						return activation, nil
+					}
+				}
+			} else {
+				failures = append(failures, fmt.Errorf("failed to invoke %d %+v", response.StatusCode,response.Body))
+				log.Debugf("failed [%d/%d ] times to invoke %s with %+v  %+v %+v", i, MaxRetries,
+					name, invocation.Value, invoke, response)
+			}
+		} else {
+			log.Warnf("failed [%d/%d]", i, MaxRetries)
+		}
+	}
+
+	msg := &strings.Builder{}
+	for _, err := range failures {
+		msg.WriteString(err.Error())
+		msg.WriteRune('\t')
+	}
+	return nil, fmt.Errorf(msg.String())
+
+}
+
+func (l *WhiskClient) pollActivation(activationID string) (io.ReadCloser, error) {
+	//might want to configuer the backof rate?
+	backoff := 4
+
+	wait := func (backoff int) int {
+		//results not here yet... keep wating
+		<-time.After(time.Second*time.Duration(backoff))
+		//exponential backoff of 4,16,64,256,1024 seconds
+		backoff = backoff * 4
+		log.Debugf("results not ready waiting for %d", backoff)
+		return backoff
+	}
+
+	log.Debugf("polling Activation %s", activationID)
+	for x := 0; x < MaxPullRetries; x++ {
+		err := l.spawn.Wait(l.ctx)
+		if err != nil {
+			return nil, err
+		}
+		invoke, response, err := l.Client.Activations.Get(activationID)
+		if err != nil || response.StatusCode == 404 {
+			backoff = wait(backoff)
+			if err != nil {
+				log.Debugf("failed to poll %+v",err)
+			}
+		} else if response.StatusCode == 200 {
+			log.Debugf("polled %s successfully",activationID)
+			marshal, err := json.Marshal(invoke.Result)
+			if err == nil {
+				return ioutil.NopCloser(bytes.NewReader(marshal)), nil
+			} else {
+				return nil, fmt.Errorf("failed to fetch activation %s due to %f", activationID, err)
+			}
+		}
+	}
+	return nil, fmt.Errorf("could not fetch activation after %d ties in %d", MaxPullRetries, backoff+backoff-1)
 }

@@ -49,23 +49,24 @@ func TestHandleWhiskRequest(t *testing.T) {
 	job.bytesRead = 10
 	job.bytesWritten = 20
 
-	lambdaDriver = NewDriver(job)
-	lambdaDriver.runtimeID = "foo"
-	lambdaDriver.Start = time.Time{}
+	whiskDriver = NewDriver(job)
+	whiskDriver.runtimeID = "foo"
+	whiskDriver.Start = time.Time{}
 
 	mockTaskResult := taskResult{
 		BytesRead:    0,
 		BytesWritten: 0,
 		Log:          "",
-		HId:          "test",
-		CId:          lambdaDriver.runtimeID,
+		HId:          mockHostID(),
+		RId: 		   mockHostID(),
+		CId:          whiskDriver.runtimeID,
 		JId:          "0_0",//phase_bin
-		CStart:       lambdaDriver.Start.Unix(),
+		CStart:       whiskDriver.Start.UnixNano(),
 		EStart:       0,
 		EEnd:         0,
 	}
 
-	output, err := handle(lambdaDriver,mockHostID)(testTask)
+	output, err := handle(whiskDriver,mockHostID,mockHostID)(testTask)
 	assert.Nil(t, err)
 	output.EStart = 0
 	output.EEnd = 0
@@ -73,7 +74,7 @@ func TestHandleWhiskRequest(t *testing.T) {
 
 	testTask.Phase = ReducePhase
 	mockTaskResult.JId = "1_0"
-	output, err = handle(lambdaDriver,mockHostID)(testTask)
+	output, err = handle(whiskDriver,mockHostID,mockHostID)(testTask)
 
 	assert.Nil(t, err)
 	output.EStart = 0

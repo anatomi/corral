@@ -4,6 +4,9 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"fmt"
+	"github.com/ISE-SMILE/corral/internal/pkg/corcache"
+	"github.com/aws/aws-lambda-go/lambdacontext"
 	"os"
 	"strconv"
 	"strings"
@@ -39,19 +42,20 @@ func runningInLambda() bool {
 
 var lambdaNodeName string
 
-func lambdaHostID() string{
-	if lambdaNodeName != ""{
+func lambdaHostID() string {
+	if lambdaNodeName != "" {
 		return lambdaNodeName
 	}
 
-	f,err := os.Open("/proc/self/cgroup")
+	f, err := os.Open("/proc/self/cgroup")
 	defer f.Close()
 	if err == nil {
 		reader := bufio.NewScanner(f)
-		for reader.Scan(){
+		for reader.Scan() {
 			line := reader.Text()
-			if strings.Contains(line,"cpu") {
-				lambdaNodeName = line
+			if idx:=strings.Index(line,"sandbox-root-");idx>=0 {
+				line = line[idx:]
+				lambdaNodeName = line[13:19]
 				return lambdaNodeName
 			}
 		}
@@ -68,13 +72,23 @@ func lambdaHostID() string{
 }
 
 func handleRequest(ctx context.Context, task task) (string, error) {
-	result,err := handle(lambdaDriver,lambdaHostID)(task)
-	if err != nil{
-		return "",err
-	} else {
-		payload, _ := json.Marshal(result)
-		return string(payload),nil
+	result, err := handle(lambdaDriver, lambdaHostID,func() string{
+
+		if lc, ok := lambdacontext.FromContext(ctx); ok {
+			rId := lc.AwsRequestID
+			sn := lambdacontext.LogStreamName
+			return fmt.Sprintf("%s_%s",rId,sn)
+		}
+
+		return os.Getenv("AWS_LAMBDA_LOG_STREAM_NAME")
+	})(task)
+	if err != nil {
+		return "", err
 	}
+
+	payload, _ := json.Marshal(result)
+	return string(payload), nil
+
 }
 
 type lambdaExecutor struct {
@@ -110,6 +124,10 @@ func (l *lambdaExecutor) Start(d *Driver) {
 	lambda.Start(handleRequest)
 }
 
+func (l *lambdaExecutor) HintSplits(splits uint) error {
+	return nil
+}
+
 func (l *lambdaExecutor) RunMapper(job *Job, jobNumber int, binID uint, inputSplits []inputSplit) error {
 	mapTask := task{
 		JobNumber:        jobNumber,
@@ -118,6 +136,7 @@ func (l *lambdaExecutor) RunMapper(job *Job, jobNumber int, binID uint, inputSpl
 		Splits:           inputSplits,
 		IntermediateBins: job.intermediateBins,
 		FileSystemType:   corfs.FilesystemType(job.fileSystem),
+		CacheSystemType:  corcache.CacheSystemTypes(job.cacheSystem),
 		WorkingLocation:  job.outputPath,
 	}
 	payload, err := json.Marshal(mapTask)
@@ -141,6 +160,7 @@ func (l *lambdaExecutor) RunReducer(job *Job, jobNumber int, binID uint) error {
 		Phase:           ReducePhase,
 		BinID:           binID,
 		FileSystemType:  corfs.FilesystemType(job.fileSystem),
+		CacheSystemType:  corcache.CacheSystemTypes(job.cacheSystem),
 		WorkingLocation: job.outputPath,
 		Cleanup:         job.config.Cleanup,
 	}
@@ -159,7 +179,7 @@ func (l *lambdaExecutor) RunReducer(job *Job, jobNumber int, binID uint) error {
 	return err
 }
 
-func (l *lambdaExecutor) Deploy() {
+func (l *lambdaExecutor) Deploy(driver *Driver) error {
 	var roleARN string
 	var err error
 	if viper.GetBool("lambdaManageRole") {
@@ -177,22 +197,33 @@ func (l *lambdaExecutor) Deploy() {
 		Timeout:    viper.GetInt64("lambdaTimeout"),
 		MemorySize: viper.GetInt64("lambdaMemory"),
 	}
-	err = l.DeployFunction(config)
-	if err != nil {
-		panic(err)
+
+	if driver.cache != nil {
+		config.CacheConfigInjector = driver.cache.FunctionInjector()
 	}
+
+	return l.DeployFunction(config)
 }
 
-func (l *lambdaExecutor) Undeploy() {
+func (l *lambdaExecutor) Undeploy() error {
 	log.Info("Undeploying function")
+
 	err := l.LambdaClient.DeleteFunction(l.functionName)
 	if err != nil {
 		log.Errorf("Error when undeploying function: %s", err)
 	}
 
 	log.Info("Undeploying IAM Permissions")
-	err = l.IAMClient.DeletePermissions(corralRoleName)
-	if err != nil {
+	iam_err := l.IAMClient.DeletePermissions(corralRoleName)
+	if iam_err != nil {
 		log.Errorf("Error when undeploying IAM permissions: %s", err)
+		if err != nil{
+			err = fmt.Errorf("Error when undeploying %s, %s",err,iam_err)
+		} else {
+			err = iam_err
+		}
 	}
+
+	return err
+
 }

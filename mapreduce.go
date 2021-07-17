@@ -28,6 +28,10 @@ type Reducer interface {
 	Reduce(key string, values ValueIterator, emitter Emitter)
 }
 
+type PauseFunc 	func() string
+type StopFunc 	func() string
+type HintFunc 	func() string
+
 // PartitionFunc defines a function that can be used to segment map keys into intermediate buckets.
 // The default partition function simply hashes the key, and takes hash % numBins to determine the bin.
 // The value returned from PartitionFunc (binIdx) must be in the range 0 <= binIdx < numBins, i.e. [0, numBins)

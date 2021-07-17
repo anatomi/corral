@@ -3,11 +3,13 @@ package corral
 import (
 	"context"
 	"fmt"
+	"github.com/ISE-SMILE/corral/internal/pkg/corcache"
+	"io"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"runtime"
 	"runtime/pprof"
-	"strings"
 	"sync"
 	"time"
 
@@ -25,7 +27,7 @@ import (
 	flag "github.com/spf13/pflag"
 )
 
-var src rand.Source;
+var src rand.Source
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
@@ -37,8 +39,21 @@ type Driver struct {
 	jobs      []*Job
 	config    *config
 	executor  executor
+	cache     corcache.CacheSystem
 	runtimeID string
 	Start     time.Time
+
+	currentJob  int
+	Runtime     time.Duration
+
+	lastOutputs []string
+}
+
+func (d *Driver) CurrentJob() *Job  {
+	if d.currentJob >= 0 && d.currentJob < len(d.jobs){
+		return d.jobs[d.currentJob]
+	}
+	return nil
 }
 
 // config configures a Driver's execution of jobs
@@ -50,6 +65,7 @@ type config struct {
 	MaxConcurrency  int
 	WorkingLocation string
 	Cleanup         bool
+	Cache  			corcache.CacheSystemType
 }
 
 func newConfig() *config {
@@ -76,9 +92,10 @@ type Option func(*config)
 // NewDriver creates a new Driver with the provided job and optional configuration
 func NewDriver(job *Job, options ...Option) *Driver {
 	d := &Driver{
-		jobs:     []*Job{job},
-		executor: localExecutor{},
-		runtimeID: RandomName(),
+		jobs:      []*Job{job},
+		executor:  &localExecutor{time.Now()},
+		runtimeID: randomName(),
+		Start:     time.Now(),
 	}
 
 	c := newConfig()
@@ -93,6 +110,17 @@ func NewDriver(job *Job, options ...Option) *Driver {
 
 	d.config = c
 	log.Debugf("Loaded config: %#v", c)
+
+	if c.Cache != corcache.NoCache {
+		cache,err := corcache.NewCacheSystem(c.Cache)
+		if err != nil {
+			log.Debugf("failed to init cache, %+v",err)
+			panic(err)
+		} else {
+			log.Infof("using cache %s",c.Cache)
+		}
+		d.cache = cache
+	}
 
 	return d
 }
@@ -139,6 +167,67 @@ func WithInputs(inputs ...string) Option {
 	}
 }
 
+func WithLocalMemoryCache() Option {
+	return func(c *config) {
+		c.Cache = corcache.Local
+	}
+}
+
+func WithRedisBackedCache() Option {
+	return func(c *config) {
+		c.Cache = corcache.Redis
+	}
+}
+
+func (d *Driver) GetFinalOutputs() []string{
+	return d.lastOutputs
+}
+
+func (d *Driver) DownloadAndRemove(inputs []string, dest string) error {
+	fs := corfs.InferFilesystem(inputs[0])
+
+	files := make([]string,0)
+	for _,input := range inputs {
+		list,err := fs.ListFiles(input)
+		if err != nil {
+			return err
+		}
+		for _,f := range list {
+			files = append(files,f.Name)
+		}
+
+	}
+
+	log.Infof("found %d files to download",len(files))
+	bar := pb.New(len(files)).Prefix("DownloadAndRemove").Start()
+	for _,path := range files {
+		wr,err := os.OpenFile(filepath.Join(dest,path),os.O_CREATE|os.O_RDWR,0664)
+		if err != nil {
+			return err
+		}
+		r,err := fs.OpenReader(path,0)
+		if err != nil {
+			return err
+		}
+		_,err = io.Copy(wr,r)
+		if err != nil {
+			return err
+		}
+
+		err = fs.Delete(path)
+		if err != nil {
+			return err
+		}
+
+		bar.Increment()
+	}
+	bar.Finish()
+
+
+
+	return nil
+}
+
 func (d *Driver) runMapPhase(job *Job, jobNumber int, inputs []string) {
 	inputSplits := job.inputSplits(inputs, d.config.SplitSize)
 	if len(inputSplits) == 0 {
@@ -151,9 +240,17 @@ func (d *Driver) runMapPhase(job *Job, jobNumber int, inputs []string) {
 	log.Debugf("Number of job input bins: %d", len(inputBins))
 	bar := pb.New(len(inputBins)).Prefix("Map").Start()
 
+	//tell the platfrom how may invocations we plan on dooing
+	err := d.executor.HintSplits(uint(len(inputBins)))
+	if err != nil{
+		log.Warn("failed to hint platfrom, expect perfromance degredations")
+		log.Debugf("hint error:%+v",err)
+	}
+
 	var wg sync.WaitGroup
 	sem := semaphore.NewWeighted(int64(d.config.MaxConcurrency))
 	for binID, bin := range inputBins {
+		//XXX: binID casted to uint
 		sem.Acquire(context.Background(), 1)
 		wg.Add(1)
 		go func(bID uint, b []inputSplit) {
@@ -173,6 +270,14 @@ func (d *Driver) runMapPhase(job *Job, jobNumber int, inputs []string) {
 func (d *Driver) runReducePhase(job *Job, jobNumber int) {
 	var wg sync.WaitGroup
 	bar := pb.New(int(job.intermediateBins)).Prefix("Reduce").Start()
+
+	//tell the platfrom how may invocations we plan on dooing
+	err := d.executor.HintSplits(job.intermediateBins)
+	if err != nil{
+		log.Warn("failed to hint platfrom, expect perfromance degredations")
+		log.Debugf("hint error:%+v",err)
+	}
+
 	for binID := uint(0); binID < job.intermediateBins; binID++ {
 		wg.Add(1)
 		go func(bID uint) {
@@ -211,11 +316,29 @@ func (d *Driver) run() {
 		os.Exit(-10)
 	}
 
+	//TODO: do preflight checks e.g. check if in/out is accassible...
 	//TODO introduce interface for deploy/undeploy
 	if lBackend, ok := d.executor.(platform); ok {
-
-		lBackend.Deploy()
+		err := lBackend.Deploy(d)
+		if err != nil{
+			panic(err)
+		}
 	}
+
+	if d.cache != nil{
+		err := d.cache.Deploy()
+		if err != nil{
+			log.Errorf("failed to deploy cache, %+v",err)
+		}
+
+		err = d.cache.Init()
+		if err != nil{
+			log.Errorf("failed to initilized cache, %+v",err)
+		}
+	}
+
+
+
 
 	if len(d.config.Inputs) == 0 {
 		log.Error("No inputs!")
@@ -223,10 +346,21 @@ func (d *Driver) run() {
 		return
 	}
 
+	if rlh := viper.GetString("remoteLoggingHost");rlh != ""{
+		log.Debugf("using remote logging host: %s for functions",rlh)
+	}
+
 	inputs := d.config.Inputs
 	for idx, job := range d.jobs {
+		if viper.GetBool("verbose") || *verbose {
+			log.Debugf("collecting job metrics")
+			go job.CollectMetrics()
+		}
 		// Initialize job filesystem
 		job.fileSystem = corfs.InferFilesystem(inputs[0])
+
+		//set cache system based on driver
+		job.cacheSystem = d.cache
 
 		jobWorkingLoc := d.config.WorkingLocation
 		log.Infof("Starting job%d (%d/%d)", idx, idx+1, len(d.jobs))
@@ -242,15 +376,36 @@ func (d *Driver) run() {
 
 		// Set inputs of next job to be outputs of current job
 		inputs = []string{job.fileSystem.Join(jobWorkingLoc, "output-*")}
+		d.lastOutputs = inputs
 
 		log.Infof("Job %d - Total Bytes Read:\t%s", idx, humanize.Bytes(uint64(job.bytesRead)))
 		log.Infof("Job %d - Total Bytes Written:\t%s", idx, humanize.Bytes(uint64(job.bytesWritten)))
 
+		//check if we need to flush the intermedate data to disk
+		if viper.GetBool("durable") && !viper.GetBool("cleanup") {
+			if d.cache != nil {
+				//we dont need to wait for this to finish, this might also take a while ...
+				go func(cache corcache.CacheSystem,fs corfs.FileSystem){
+					err := cache.Flush(fs)
+
+					if err != nil {
+						log.Errorf("failed to flush cache to fs, %+v",err)
+					}
+				}(d.cache,job.fileSystem)
+			}
+		}
+
+		//clear cache
+		if viper.GetBool("cleanup") && d.cache != nil {
+			err := d.cache.Clear()
+			if err != nil{
+				log.Warnf("failed to cleanup cache, %+v",err)
+			}
+		}
+
 		job.done()
 	}
 }
-
-//TODO: move bool flag to string?
 var backendFlag = flag.StringP("backend", "b", "", "Define backend [local,lambda,whisk] - default local")
 
 var outputDir = flag.StringP("out", "o", "", "Output `directory` (can be local or in S3)")
@@ -258,9 +413,9 @@ var memprofile = flag.String("memprofile", "", "Write memory profile to `file`")
 var verbose = flag.BoolP("verbose", "v", false, "Output verbose logs")
 
 var undeploy = flag.Bool("undeploy", false, "Undeploy the Lambda function and IAM permissions without running the driver")
-
 // Main starts the Driver, running the submitted jobs.
 func (d *Driver) Main() {
+
 	//log.SetLevel(log.DebugLevel)
 	if viper.GetBool("verbose") || *verbose {
 		log.SetLevel(log.DebugLevel)
@@ -271,12 +426,25 @@ func (d *Driver) Main() {
 		if backendFlag == nil {
 			panic("missing backend flag!")
 		}
+		//TODO: modify the constants
+		var backend platform
 		if *backendFlag == "lambda" {
-			lambda := newLambdaExecutor(viper.GetString("lambdaFunctionName"))
-			lambda.Undeploy()
+			backend = newLambdaExecutor(viper.GetString("lambdaFunctionName"))
 		} else if *backendFlag == "whisk" {
-			whisk := newWhiskExecutor(viper.GetString("lambdaFunctionName"))
-			whisk.Undeploy()
+			backend = newWhiskExecutor(viper.GetString("lambdaFunctionName"))
+		}
+
+		err := backend.Undeploy()
+		if err != nil{
+			log.Errorf("failed to undeploy, you are on youre own %s",err)
+		}
+
+
+		if d.cache != nil {
+			err := d.cache.Undeploy()
+			if err != nil {
+				log.Warnf("failed to undeploy cache, you are on youre own %s", err)
+			}
 		}
 		return
 	}
@@ -298,7 +466,7 @@ func (d *Driver) Main() {
 	d.run()
 	end := time.Now()
 	fmt.Printf("Job Execution Time: %s\n", end.Sub(start))
-
+	d.Runtime = end.Sub(start)
 	if *memprofile != "" {
 		f, err := os.Create(*memprofile)
 		if err != nil {
@@ -310,32 +478,5 @@ func (d *Driver) Main() {
 		}
 		f.Close()
 	}
-}
-
-
-const letterBytes = "abcdef0123456789-_"
-const (
-	letterIdxBits = 6                    // 6 bits to represent a letter index
-	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
-	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
-)
-
-func RandomName() string {
-	sb := strings.Builder{}
-	sb.Grow(10)
-	// A src.Int63() generates 63 random bits, enough for letterIdxMax characters!
-	for i, cache, remain := 9, src.Int63(), letterIdxMax; i >= 0; {
-		if remain == 0 {
-			cache, remain = src.Int63(), letterIdxMax
-		}
-		if idx := int(cache & letterIdxMask); idx < len(letterBytes) {
-			sb.WriteByte(letterBytes[idx])
-			i--
-		}
-		cache >>= letterIdxBits
-		remain--
-	}
-
-	return sb.String()
 }
 

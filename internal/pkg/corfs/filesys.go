@@ -27,6 +27,7 @@ type FileSystem interface {
 	OpenWriter(filePath string) (io.WriteCloser, error)
 	Delete(filePath string) error
 	Join(elem ...string) string
+	Split(path string) []string
 	Init() error
 }
 
@@ -37,7 +38,7 @@ type FileInfo struct {
 }
 
 // InitFilesystem intializes a filesystem of the given type
-func InitFilesystem(fsType FileSystemType) FileSystem {
+func InitFilesystem(fsType FileSystemType) (FileSystem, error) {
 	var fs FileSystem
 	switch fsType {
 		case Local:
@@ -52,8 +53,12 @@ func InitFilesystem(fsType FileSystemType) FileSystem {
 
 	}
 
-	fs.Init()
-	return fs
+	err := fs.Init()
+	if err != nil{
+		log.Errorf("failed to init filesystem, %+v",err)
+		return nil, err
+	}
+	return fs, nil
 }
 
 func FilesystemType(fs FileSystem) FileSystemType {

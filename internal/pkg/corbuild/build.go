@@ -32,7 +32,6 @@ func crossCompile(binName string) (string, error) {
 		".",
 	}
 	cmd := exec.Command("go", args...)
-
 	cmd.Env = append(os.Environ(), "GOOS=linux")
 	cmd.Env = append(os.Environ(), "GOARCH=amd64")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
@@ -47,18 +46,25 @@ func crossCompile(binName string) (string, error) {
 
 // buildPackage builds the current directory as a lambda package.
 // It returns a byte slice containing a compressed binary that can be upload to lambda.
-func BuildPackage(mainFnName string) ([]byte, error) {
+func BuildPackage(mainFnName string) ([]byte, string, error) {
 	log.Info("Building function")
 	binFile, err := crossCompile("lambda_artifact")
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	defer os.RemoveAll(filepath.Dir(binFile)) // Remove temporary binary file
+
+	codeHash,err := CodeHash(".")
+
+	if err != nil{
+		log.Errorf("could not generate codehash %s",err)
+		codeHash = ""
+	}
 
 	log.Debug("Opening recompiled binary to be zipped")
 	binReader, err := os.Open(binFile)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	zipBuf := new(bytes.Buffer)
@@ -72,12 +78,12 @@ func BuildPackage(mainFnName string) ([]byte, error) {
 	log.Debug("Adding binary to zip archive")
 	writer, err := archive.CreateHeader(header)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	_, err = io.Copy(writer, binReader)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	//In case we are building an openwhisk package...
@@ -90,11 +96,11 @@ func BuildPackage(mainFnName string) ([]byte, error) {
 
 	writer, err = archive.CreateHeader(header)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	_, err = io.Copy(writer, bytes.NewReader(data))
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	binReader.Close()
 	archive.Close()
@@ -110,7 +116,7 @@ func BuildPackage(mainFnName string) ([]byte, error) {
 		}
 	}
 
-	return data, nil
+	return data,codeHash, nil
 }
 
 func InjectConfiguration(env map[string]*string) {

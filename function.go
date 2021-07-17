@@ -2,24 +2,52 @@ package corral
 
 import (
 	"fmt"
-	"github.com/ISE-SMILE/corral/internal/pkg/corfs"
-	log "github.com/sirupsen/logrus"
+	"github.com/ISE-SMILE/corral/internal/pkg/corcache"
 	"runtime/debug"
 	"time"
+
+	"github.com/ISE-SMILE/corral/internal/pkg/corfs"
+	log "github.com/sirupsen/logrus"
 )
 
+
+
+
+
 //takes a driver and a
-func handle(driver *Driver,hostId func () string) func(task task) (taskResult, error) {
+func handle(driver *Driver, hostID func() string, requestID func() string) func(task task) (taskResult, error) {
 	return func(task task) (taskResult, error) {
 		estart := time.Now()
 		// Precaution to avoid running out of memory for reused Lambdas
 		debug.FreeOSMemory()
-
+		result := taskResult{
+			HId:          hostID(),
+			CId:          driver.runtimeID,
+			JId:          fmt.Sprintf("%d_%d", task.Phase, task.BinID),
+			RId: 		  requestID(),
+			CStart:       driver.Start.UnixNano(),
+			EStart:       estart.UnixNano(),
+		}
 		// Setup current job
-		fs := corfs.InitFilesystem(task.FileSystemType)
+		//we can assume that this dose not change all the time
+		var err error
+		fs, err := corfs.InitFilesystem(task.FileSystemType)
+		if err != nil{
+			result.EEnd =      time.Now().UnixNano()
+			return result, err
+		}
 		log.Infof("%d - %+v", task.FileSystemType, task)
 		currentJob := driver.jobs[task.JobNumber]
+
+		cache,err := corcache.NewCacheSystem(task.CacheSystemType)
+		if err != nil{
+			result.EEnd =      time.Now().UnixNano()
+			return result, err
+		}
+
+		driver.currentJob = task.JobNumber
 		currentJob.fileSystem = fs
+		currentJob.cacheSystem = cache
 		currentJob.intermediateBins = task.IntermediateBins
 		currentJob.outputPath = task.WorkingLocation
 		currentJob.config.Cleanup = task.Cleanup
@@ -28,7 +56,7 @@ func handle(driver *Driver,hostId func () string) func(task task) (taskResult, e
 		currentJob.bytesRead = 0
 		currentJob.bytesWritten = 0
 
-		var err error
+
 		switch task.Phase {
 			case MapPhase:
 				err = currentJob.runMapper(task.BinID, task.Splits)
@@ -37,17 +65,11 @@ func handle(driver *Driver,hostId func () string) func(task task) (taskResult, e
 			default:
 				err = fmt.Errorf("Unknown phase: %d", task.Phase)
 		}
-		eend := time.Now()
-		result := taskResult{
-			BytesRead:    int(currentJob.bytesRead),
-			BytesWritten: int(currentJob.bytesWritten),
-			HId:          hostId(),
-			CId:          driver.runtimeID,
-			JId:          fmt.Sprintf("%d_%d", task.Phase, task.BinID),
-			CStart:       driver.Start.Unix(),
-			EStart:       estart.Unix(),
-			EEnd:         eend.Unix(),
-		}
+
+		result.BytesRead =  int(currentJob.bytesRead)
+		result.BytesWritten = int(currentJob.bytesWritten)
+		result.EEnd =      time.Now().UnixNano()
+
 		return result, err
 	}
 }

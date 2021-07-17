@@ -194,7 +194,7 @@ func (s *S3FileSystem) Delete(filePath string) error {
 }
 
 // Join joins file path elements
-func (s *S3FileSystem) Join(elem ...string) string {
+func (s S3FileSystem) Join(elem ...string) string {
 	stripped := make([]string, len(elem))
 	for i, str := range elem {
 		if strings.HasPrefix(str, "/") {
@@ -206,4 +206,10 @@ func (s *S3FileSystem) Join(elem ...string) string {
 		stripped[i] = str
 	}
 	return strings.Join(stripped, "/")
+}
+
+
+// Join joins file path elements
+func (s S3FileSystem) Split(path string) []string {
+	return strings.Split(path,"/")
 }

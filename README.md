@@ -169,6 +169,7 @@ Below are the config settings that may be changed.
 * `lambdaFunctionName` (string) - The name to use for created Lambda functions. (Default: `corral_function`)
 * `lambdaTimeout` (int64) - The timeout (maximum function duration) in seconds of created Lambda functions. See [AWS lambda docs](https://docs.aws.amazon.com/lambda/latest/dg/resource-model.html) for details. (Default: `180`)
 * `lambdaMemory` (int64) - The maximum memory that a Lambda function may use. See [AWS lambda docs](https://docs.aws.amazon.com/lambda/latest/dg/resource-model.html) for details. (Default: `1500`)
+  `requestPerMinute` (int64) - The number of request to the FaaS platform per Minute (Default: `200`)
 
 #### Lambda Settings
 * `lambdaManageRole` (bool) - Whether corral should manage creating an IAM role for Lambda execution. (Default: `true`)

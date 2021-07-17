@@ -6,6 +6,8 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"github.com/ISE-SMILE/corral/internal/pkg/corcache"
+	"github.com/spf13/viper"
 	"os"
 	"strconv"
 	"strings"
@@ -24,8 +26,13 @@ type Job struct {
 	Map           Mapper
 	Reduce        Reducer
 	PartitionFunc PartitionFunc
+	PauseFunc 	  PauseFunc
+	StopFunc      StopFunc
+	HintFunc      HintFunc
 
 	fileSystem       corfs.FileSystem
+	cacheSystem 	 corcache.CacheSystem
+
 	config           *config
 	intermediateBins uint
 	outputPath       string
@@ -34,6 +41,7 @@ type Job struct {
 	bytesWritten int64
 
 	activationLog chan taskResult
+	wg sync.WaitGroup
 }
 
 func (j *Job) collectActivation(result taskResult){
@@ -44,7 +52,13 @@ func (j *Job) collectActivation(result taskResult){
 
 // Logic for running a single map task
 func (j *Job) runMapper(mapperID uint, splits []inputSplit) error {
-	emitter := newMapperEmitter(j.intermediateBins, mapperID, j.outputPath, j.fileSystem)
+	//check if we can use a cacheFS instead
+	var fs corfs.FileSystem = j.fileSystem
+	if j.cacheSystem != nil {
+		fs = j.cacheSystem
+	}
+
+	emitter := newMapperEmitter(j.intermediateBins, mapperID, j.outputPath, fs)
 	if j.PartitionFunc != nil {
 		emitter.partitionFunc = j.PartitionFunc
 	}
@@ -57,7 +71,6 @@ func (j *Job) runMapper(mapperID uint, splits []inputSplit) error {
 	}
 
 	atomic.AddInt64(&j.bytesWritten, emitter.bytesWritten())
-
 	return emitter.close()
 }
 
@@ -114,9 +127,15 @@ func (j *Job) runMapperSplit(split inputSplit, emitter Emitter) error {
 
 // Logic for running a single reduce task
 func (j *Job) runReducer(binID uint) error {
+	//check if we can use a cacheFS instead
+	var fs corfs.FileSystem = j.fileSystem
+	if (j.cacheSystem != nil) {
+		fs = j.cacheSystem
+	}
+
 	// Determine the intermediate data files this reducer is responsible for
-	path := j.fileSystem.Join(j.outputPath, fmt.Sprintf("map-bin%d-*", binID))
-	files, err := j.fileSystem.ListFiles(path)
+	path := fs.Join(j.outputPath, fmt.Sprintf("map-bin%d-*", binID))
+	files, err := fs.ListFiles(path)
 	if err != nil {
 		return err
 	}
@@ -133,7 +152,7 @@ func (j *Job) runReducer(binID uint) error {
 	var bytesRead int64
 
 	for _, file := range files {
-		reader, err := j.fileSystem.OpenReader(file.Name, 0)
+		reader, err := fs.OpenReader(file.Name, 0)
 		bytesRead += file.Size
 		if err != nil {
 			return err
@@ -157,7 +176,7 @@ func (j *Job) runReducer(binID uint) error {
 
 		// Delete intermediate map data
 		if j.config.Cleanup {
-			err := j.fileSystem.Delete(file.Name)
+			err := fs.Delete(file.Name)
 			if err != nil {
 				log.Error(err)
 			}
@@ -242,34 +261,68 @@ func (j *Job) done()  {
 	if j.activationLog != nil{
 		close(j.activationLog)
 	}
+	j.wg.Wait()
 }
 
 func (j *Job) writeActivationLog() {
-	logName := fmt.Sprintf("activation_%s.log",time.Now().Format("2020_01_02"))
-	logFile, err := os.OpenFile(logName, os.O_CREATE|os.O_APPEND, 0666)
+
+	logName := fmt.Sprintf("%s_%s.csv",
+		viper.GetString("logName"),
+		time.Now().Format("2006_01_02"))
+	logFile, err := os.OpenFile(logName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil{
 		log.Errorf("failed to open activation log @ %s - %f",logName,err)
 		return
 	}
 	writer := bufio.NewWriter(logFile)
 	logWriter := csv.NewWriter(writer)
-	defer logFile.Close()
+
 	//write header
-	logWriter.Write([]string{"JId","CId","HId","CStart","EStart","EEnd","Read","Written"})
+	err = logWriter.Write([]string{
+		"JId", "CId", "HId","RId", "CStart", "EStart", "EEnd", "Read", "Written",
+		"CMEM","CMBS","CRBS","CSP","CMC","CTO",
+
+		})
+	if err != nil{
+		log.Errorf("failed to open activation log @ %s - %f",logName,err)
+		return
+	}
+	j.wg.Add(1)
 	for task := range j.activationLog{
 
-		logWriter.Write([]string{
+		err = logWriter.Write([]string{
 			task.JId,
 			task.CId,
 			task.HId,
+			task.RId,
 			strconv.FormatInt(task.CStart, 10),
 			strconv.FormatInt(task.EStart, 10),
 			strconv.FormatInt(task.EEnd, 10),
 			strconv.Itoa(task.BytesRead),
 			strconv.Itoa(task.BytesWritten),
+			strconv.FormatInt(viper.GetInt64("lambdaMemory"),10),
+			strconv.FormatInt(viper.GetInt64("mapBinSize"),10),
+			strconv.FormatInt(viper.GetInt64("reduceBinSize"),10),
+			strconv.FormatInt(viper.GetInt64("splitSize"),10),
+			strconv.FormatInt(viper.GetInt64("maxConcurrency"),10),
+			strconv.FormatInt(viper.GetInt64("lambdaTimeout"),10),
 		})
+		if err != nil{
+			log.Debugf("failed to write %+v - %f",task,err)
+		}
+		logWriter.Flush()
 	}
-	logWriter.Flush()
+	err = logFile.Close()
+	log.Info("written metrics")
+	j.wg.Done()
+}
+
+//needs to run in a process
+func (j *Job) CollectMetrics() {
+	j.activationLog = make(chan taskResult)
+	j.wg = sync.WaitGroup{}
+	j.writeActivationLog()
+
 }
 
 // NewJob creates a new job from a Mapper and Reducer.
@@ -278,11 +331,6 @@ func NewJob(mapper Mapper, reducer Reducer) *Job {
 		Map:    mapper,
 		Reduce: reducer,
 		config: &config{},
-	}
-
-	if log.IsLevelEnabled(log.DebugLevel){
-		job.activationLog = make(chan taskResult)
-		go job.writeActivationLog()
 	}
 
 	return job

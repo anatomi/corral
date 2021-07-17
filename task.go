@@ -1,6 +1,7 @@
 package corral
 
 import (
+	"github.com/ISE-SMILE/corral/internal/pkg/corcache"
 	"github.com/ISE-SMILE/corral/internal/pkg/corfs"
 )
 
@@ -23,6 +24,7 @@ type task struct {
 	IntermediateBins uint
 	Splits           []inputSplit
 	FileSystemType   corfs.FileSystemType
+	CacheSystemType  corcache.CacheSystemType
 	WorkingLocation  string
 	Cleanup          bool
 }
@@ -36,6 +38,7 @@ type taskResult struct {
 	HId string `json:"HId"` //host identifier
 	CId string `json:"CId"` //runtime identifier
 	JId string `json:"JId"` //job identifier
+	RId string `json:"RId"` //request identifier (by platform)
 	CStart int64 `json:"cStart"` //start of runtime
 	EStart int64 `json:"eStart"` //start of request
 	EEnd int64 `json:"eEnd"` //end of request
