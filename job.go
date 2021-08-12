@@ -9,6 +9,7 @@ import (
 	"github.com/ISE-SMILE/corral/internal/pkg/corcache"
 	"github.com/spf13/viper"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -26,12 +27,12 @@ type Job struct {
 	Map           Mapper
 	Reduce        Reducer
 	PartitionFunc PartitionFunc
-	PauseFunc 	  PauseFunc
+	PauseFunc     PauseFunc
 	StopFunc      StopFunc
 	HintFunc      HintFunc
 
-	fileSystem       corfs.FileSystem
-	cacheSystem 	 corcache.CacheSystem
+	fileSystem  corfs.FileSystem
+	cacheSystem corcache.CacheSystem
 
 	config           *config
 	intermediateBins uint
@@ -41,11 +42,11 @@ type Job struct {
 	bytesWritten int64
 
 	activationLog chan taskResult
-	wg sync.WaitGroup
+	wg            sync.WaitGroup
 }
 
-func (j *Job) collectActivation(result taskResult){
-	if j.activationLog != nil{
+func (j *Job) collectActivation(result taskResult) {
+	if j.activationLog != nil {
 		j.activationLog <- result
 	}
 }
@@ -75,6 +76,7 @@ func (j *Job) runMapper(mapperID uint, splits []inputSplit) error {
 }
 
 func splitInputRecord(record string) *keyValue {
+	//XXX: in case of map this will just cost a lot of unnassary compute...
 	fields := strings.Split(record, "\t")
 	if len(fields) == 2 {
 		return &keyValue{
@@ -111,6 +113,10 @@ func (j *Job) runMapperSplit(split inputSplit, emitter Emitter) error {
 	for scanner.Scan() {
 		record := scanner.Text()
 		kv := splitInputRecord(record)
+		//inject the filename in case we have no other key...
+		if kv.Key == "" {
+			kv.Key = split.Filename
+		}
 		j.Map.Map(kv.Key, kv.Value, emitter)
 
 		// Stop reading when end of inputSplit is reached
@@ -129,7 +135,7 @@ func (j *Job) runMapperSplit(split inputSplit, emitter Emitter) error {
 func (j *Job) runReducer(binID uint) error {
 	//check if we can use a cacheFS instead
 	var fs corfs.FileSystem = j.fileSystem
-	if (j.cacheSystem != nil) {
+	if j.cacheSystem != nil {
 		fs = j.cacheSystem
 	}
 
@@ -257,8 +263,8 @@ func (j *Job) inputSplits(inputs []string, maxSplitSize int64) []inputSplit {
 	return splits
 }
 
-func (j *Job) done()  {
-	if j.activationLog != nil{
+func (j *Job) done() {
+	if j.activationLog != nil {
 		close(j.activationLog)
 	}
 	j.wg.Wait()
@@ -269,9 +275,16 @@ func (j *Job) writeActivationLog() {
 	logName := fmt.Sprintf("%s_%s.csv",
 		viper.GetString("logName"),
 		time.Now().Format("2006_01_02"))
+
+	if viper.IsSet("logDir") {
+		logName = filepath.Join(viper.GetString("logDir"), logName)
+	} else if dir := os.Getenv("CORRAL_LOGDIR"); dir != "" {
+		logName = filepath.Join(dir, logName)
+	}
+
 	logFile, err := os.OpenFile(logName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-	if err != nil{
-		log.Errorf("failed to open activation log @ %s - %f",logName,err)
+	if err != nil {
+		log.Errorf("failed to open activation log @ %s - %f", logName, err)
 		return
 	}
 	writer := bufio.NewWriter(logFile)
@@ -279,16 +292,15 @@ func (j *Job) writeActivationLog() {
 
 	//write header
 	err = logWriter.Write([]string{
-		"JId", "CId", "HId","RId", "CStart", "EStart", "EEnd", "Read", "Written",
-		"CMEM","CMBS","CRBS","CSP","CMC","CTO",
-
-		})
-	if err != nil{
-		log.Errorf("failed to open activation log @ %s - %f",logName,err)
+		"JId", "CId", "HId", "RId", "CStart", "EStart", "EEnd", "Read", "Written",
+		"CMEM", "CMBS", "CRBS", "CSP", "CMC", "CTO",
+	})
+	if err != nil {
+		log.Errorf("failed to open activation log @ %s - %f", logName, err)
 		return
 	}
 	j.wg.Add(1)
-	for task := range j.activationLog{
+	for task := range j.activationLog {
 
 		err = logWriter.Write([]string{
 			task.JId,
@@ -300,15 +312,15 @@ func (j *Job) writeActivationLog() {
 			strconv.FormatInt(task.EEnd, 10),
 			strconv.Itoa(task.BytesRead),
 			strconv.Itoa(task.BytesWritten),
-			strconv.FormatInt(viper.GetInt64("lambdaMemory"),10),
-			strconv.FormatInt(viper.GetInt64("mapBinSize"),10),
-			strconv.FormatInt(viper.GetInt64("reduceBinSize"),10),
-			strconv.FormatInt(viper.GetInt64("splitSize"),10),
-			strconv.FormatInt(viper.GetInt64("maxConcurrency"),10),
-			strconv.FormatInt(viper.GetInt64("lambdaTimeout"),10),
+			strconv.FormatInt(viper.GetInt64("lambdaMemory"), 10),
+			strconv.FormatInt(viper.GetInt64("mapBinSize"), 10),
+			strconv.FormatInt(viper.GetInt64("reduceBinSize"), 10),
+			strconv.FormatInt(viper.GetInt64("splitSize"), 10),
+			strconv.FormatInt(viper.GetInt64("maxConcurrency"), 10),
+			strconv.FormatInt(viper.GetInt64("lambdaTimeout"), 10),
 		})
-		if err != nil{
-			log.Debugf("failed to write %+v - %f",task,err)
+		if err != nil {
+			log.Debugf("failed to write %+v - %f", task, err)
 		}
 		logWriter.Flush()
 	}

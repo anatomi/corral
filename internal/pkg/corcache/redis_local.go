@@ -8,7 +8,6 @@ import (
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
-
 )
 
 const redis_docker_image = "redis:6.2.4-alpine"
@@ -23,16 +22,17 @@ func (l *LocalRedisDeploymentStrategy) Deploy() (*ClientConfig, error) {
 	ctx := context.Background()
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
 
 	_, err = cli.ImagePull(ctx, redis_docker_image, types.ImagePullOptions{})
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
 
-	candiates,err := cli.ContainerList(ctx,types.ContainerListOptions{
-		Filters: filters.NewArgs(filters.Arg("name",redis_container_name)),
+	candiates, err := cli.ContainerList(ctx, types.ContainerListOptions{
+		Filters: filters.NewArgs(filters.Arg("name", redis_container_name)),
+		All:     true,
 	})
 
 	if err != nil {
@@ -43,6 +43,15 @@ func (l *LocalRedisDeploymentStrategy) Deploy() (*ClientConfig, error) {
 	if len(candiates) > 0 {
 		// the container alread exsists?
 		id = candiates[0].ID
+
+		//now we start the container afterwards but this way it will not crash :P
+		if candiates[0].State != "running" {
+			err := cli.ContainerRestart(ctx, id, nil)
+			if err != nil {
+				return nil, fmt.Errorf("found an exsiting local instance but could not restart it, %+v", err)
+			}
+		}
+
 	} else {
 
 		cc, err := cli.ContainerCreate(ctx,
@@ -71,11 +80,11 @@ func (l *LocalRedisDeploymentStrategy) Deploy() (*ClientConfig, error) {
 		id = cc.ID
 	}
 
-	err = cli.ContainerStart(ctx,id,types.ContainerStartOptions{})
+	err = cli.ContainerStart(ctx, id, types.ContainerStartOptions{})
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
-	container, err := cli.ContainerInspect(ctx,id)
+	container, err := cli.ContainerInspect(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to lookup local port")
 	}
@@ -83,18 +92,16 @@ func (l *LocalRedisDeploymentStrategy) Deploy() (*ClientConfig, error) {
 	if container.NetworkSettings == nil {
 		return nil, fmt.Errorf("failed to lookup local port")
 	}
-	if ports,ok := container.NetworkSettings.Ports["6379/tcp"];ok {
+	if ports, ok := container.NetworkSettings.Ports["6379/tcp"]; ok {
 		l.port = ports[0].HostPort
 	} else {
 		return nil, fmt.Errorf("failed to lookup local port")
 	}
 
-
 	l.containerID = id
 
-
 	return &ClientConfig{
-		Addrs:          []string{fmt.Sprintf(":%+v",l.port)},
+		Addrs:          []string{fmt.Sprintf(":%+v", l.port)},
 		DB:             0,
 		User:           "",
 		password:       "",
@@ -114,8 +121,8 @@ func (l *LocalRedisDeploymentStrategy) Undeploy() error {
 		panic(err)
 	}
 
-	err = cli.ContainerRemove(ctx,l.containerID,types.ContainerRemoveOptions{
-		Force:         true,
+	err = cli.ContainerRemove(ctx, l.containerID, types.ContainerRemoveOptions{
+		Force: true,
 	})
 
 	l.containerID = ""

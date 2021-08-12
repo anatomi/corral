@@ -130,7 +130,7 @@ func TestLocalMultiJob(t *testing.T) {
 	mr2 := &testFilterJob{prefix: "t"}
 	job2 := NewJob(mr2, mr2)
 
-	driver := NewMultiStageDriver([]*Job{job1, job2},
+	driver := NewSequentialMultiStageDriver([]*Job{job1, job2},
 		WithInputs(tmpdir),
 		WithWorkingLocation(tmpdir),
 	)
