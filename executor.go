@@ -16,14 +16,12 @@ type executor interface {
 
 type smileExecuter interface {
 	executor
-	BatchRunMapper(job *Job,jobNumber int,inputSplits [][]inputSplit) error
-	BatchRunReducer(job *Job,jobNumber int, bins[]uint) error
+	BatchRunMapper(job *Job, jobNumber int, inputSplits [][]inputSplit) error
+	BatchRunReducer(job *Job, jobNumber int, bins []uint) error
 	//TODO: implement Join/Split/Shuffle?
 }
 
-
-
-type localExecutor struct{
+type localExecutor struct {
 	Start time.Time
 }
 
@@ -32,7 +30,7 @@ func (l *localExecutor) RunMapper(job *Job, jobNumber int, binID uint, inputSpli
 	// Precaution to avoid running out of memory for reused Lambdas
 	debug.FreeOSMemory()
 
-	err :=  job.runMapper(binID, inputSplits)
+	err := job.runMapper(binID, inputSplits)
 
 	eend := time.Now()
 	result := taskResult{
@@ -40,8 +38,8 @@ func (l *localExecutor) RunMapper(job *Job, jobNumber int, binID uint, inputSpli
 		BytesWritten: int(job.bytesWritten),
 		HId:          "local",
 		CId:          "local",
-		JId:          fmt.Sprintf("%d_%d", jobNumber, binID),
-		RId: 	      strconv.Itoa(jobNumber),
+		JId:          fmt.Sprintf("%d_%d_%d", jobNumber, 0, binID),
+		RId:          strconv.Itoa(jobNumber),
 		CStart:       l.Start.Unix(),
 		EStart:       estart.Unix(),
 		EEnd:         eend.Unix(),
@@ -56,7 +54,7 @@ func (l *localExecutor) RunReducer(job *Job, jobNumber int, binID uint) error {
 	// Precaution to avoid running out of memory for reused Lambdas
 	debug.FreeOSMemory()
 
-	err :=  job.runReducer(binID)
+	err := job.runReducer(binID)
 
 	eend := time.Now()
 	result := taskResult{
@@ -64,8 +62,8 @@ func (l *localExecutor) RunReducer(job *Job, jobNumber int, binID uint) error {
 		BytesWritten: int(job.bytesWritten),
 		HId:          "local",
 		CId:          "local",
-		JId:          fmt.Sprintf("%d_%d", jobNumber, binID),
-		RId: 		  strconv.Itoa(jobNumber),
+		JId:          fmt.Sprintf("%d_%d_%d", jobNumber, 1, binID),
+		RId:          strconv.Itoa(jobNumber),
 		CStart:       l.Start.Unix(),
 		EStart:       estart.Unix(),
 		EEnd:         eend.Unix(),
