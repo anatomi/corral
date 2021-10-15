@@ -21,7 +21,6 @@ import (
 )
 
 var validMinioSchemes = map[string]bool{
-	"s3":    true,
 	"minio": true,
 }
 
@@ -32,13 +31,13 @@ type MinioFileSystem struct {
 }
 
 func parseMinioUrl(uri string) (*url.URL, error) {
-	parsed, err := parseURIWithMap(uri,validMinioSchemes)
+	parsed, err := parseURIWithMap(uri, validMinioSchemes)
 	if err != nil {
 		return nil, err
 	}
-	parsed.Scheme = "s3"
+	parsed.Scheme = "minio"
 
-	return parsed,nil
+	return parsed, nil
 }
 
 // ListFiles lists files that match pathGlob.
@@ -49,8 +48,6 @@ func (s *MinioFileSystem) ListFiles(pathGlob string) ([]FileInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	//fixing the shema ...
-	pathGlob = strings.Replace(pathGlob,"minio","s3",1)
 
 	baseURI := parsed.Path
 	if globRegex.MatchString(parsed.Path) {
@@ -227,7 +224,7 @@ func (s *MinioFileSystem) Init() error {
 
 // Delete deletes the file at filePath.
 func (s *MinioFileSystem) Delete(filePath string) error {
-	parsed, err := parseS3URI(filePath)
+	parsed, err := parseMinioUrl(filePath)
 	if err != nil {
 		return err
 	}
@@ -257,9 +254,8 @@ func (s *MinioFileSystem) Join(elem ...string) string {
 
 // Join joins file path elements
 func (s *MinioFileSystem) Split(path string) []string {
-	return strings.Split(path,"/")
+	return strings.Split(path, "/")
 }
-
 
 // A EnvProvider retrieves credentials from the environment variables of the
 // running process. Environment credentials never expire.
@@ -285,16 +281,16 @@ func NewPrefixEnvCredentials(prefix string) *credentials.Credentials {
 func (e *PrefixEnvProvider) Retrieve() (credentials.Value, error) {
 	e.retrieved = false
 
-	ids := []string{e.prefix + "AWS_ACCESS_KEY_ID",e.prefix + "AWS_ACCESS_KEY"}
-	secrets := []string{e.prefix + "AWS_SECRET_ACCESS_KEY",e.prefix + "AWS_SECRET_KEY"}
-	if e.extraKeys != nil{
-		if key,ok := e.extraKeys["id"];ok {
-			ids = append(ids,key)
-			ids = append(ids,e.prefix+key)
+	ids := []string{e.prefix + "AWS_ACCESS_KEY_ID", e.prefix + "AWS_ACCESS_KEY"}
+	secrets := []string{e.prefix + "AWS_SECRET_ACCESS_KEY", e.prefix + "AWS_SECRET_KEY"}
+	if e.extraKeys != nil {
+		if key, ok := e.extraKeys["id"]; ok {
+			ids = append(ids, key)
+			ids = append(ids, e.prefix+key)
 		}
-		if key,ok := e.extraKeys["secret"];ok {
-			secrets = append(secrets,key)
-			secrets = append(secrets,e.prefix+key)
+		if key, ok := e.extraKeys["secret"]; ok {
+			secrets = append(secrets, key)
+			secrets = append(secrets, e.prefix+key)
 		}
 	}
 
@@ -323,10 +319,10 @@ func (e *PrefixEnvProvider) IsExpired() bool {
 	return !e.retrieved
 }
 
-func lookupEnvFromKeys(keys []string) string{
-	for _,key := range keys {
+func lookupEnvFromKeys(keys []string) string {
+	for _, key := range keys {
 		_id := os.Getenv(key)
-		if _id != ""{
+		if _id != "" {
 			return _id
 		}
 	}
