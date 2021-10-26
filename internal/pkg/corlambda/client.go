@@ -5,8 +5,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/ISE-SMILE/corral/internal/pkg/corbuild"
-	"github.com/ISE-SMILE/corral/internal/pkg/corcache"
+	"github.com/anatomi/corral/internal/pkg/corbuild"
+	"github.com/anatomi/corral/internal/pkg/corcache"
 	"strings"
 
 	lambdaMessages "github.com/aws/aws-lambda-go/lambda/messages"

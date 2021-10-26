@@ -2,9 +2,9 @@ package corral
 
 import (
 	"encoding/json"
-	"github.com/ISE-SMILE/corral/internal/pkg/corbuild"
-	"github.com/ISE-SMILE/corral/internal/pkg/corfs"
-	"github.com/ISE-SMILE/corral/internal/pkg/corwhisk"
+	"github.com/anatomi/corral/internal/pkg/corbuild"
+	"github.com/anatomi/corral/internal/pkg/corfs"
+	"github.com/anatomi/corral/internal/pkg/corwhisk"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"

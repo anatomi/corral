@@ -7,7 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/ISE-SMILE/corral/internal/pkg/corcache"
+	"github.com/anatomi/corral/internal/pkg/corcache"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -18,7 +18,7 @@ import (
 
 	"golang.org/x/time/rate"
 
-	"github.com/ISE-SMILE/corral/internal/pkg/corbuild"
+	"github.com/anatomi/corral/internal/pkg/corbuild"
 	"github.com/apache/openwhisk-client-go/whisk"
 	log "github.com/sirupsen/logrus"
 )

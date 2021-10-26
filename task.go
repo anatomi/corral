@@ -1,8 +1,8 @@
 package corral
 
 import (
-	"github.com/ISE-SMILE/corral/internal/pkg/corcache"
-	"github.com/ISE-SMILE/corral/internal/pkg/corfs"
+	"github.com/anatomi/corral/internal/pkg/corcache"
+	"github.com/anatomi/corral/internal/pkg/corfs"
 )
 
 // Phase is a descriptor of the phase (i.e. Map or Reduce) of a Job

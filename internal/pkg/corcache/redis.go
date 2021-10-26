@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/ISE-SMILE/corral/internal/pkg/corfs"
+	"github.com/anatomi/corral/internal/pkg/corfs"
 	"github.com/apache/openwhisk-client-go/whisk"
 	"github.com/aws/aws-sdk-go/service/lambda"
 	"github.com/go-redis/redis/v8"

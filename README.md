@@ -4,8 +4,8 @@
 
 > This fork added an OpenWhisk backend and the ability to use Minio.io instad of S3. Also this repo uses go modules for easier compileing ;)
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/ISE-SMILE/corral)](https://goreportcard.com/report/github.com/ISE-SMILE/corral)
-[![GoDoc](https://godoc.org/github.com/ISE-SMILE/corral?status.svg)](https://godoc.org/github.com/ISE-SMILE/corral)
+[![Go Report Card](https://goreportcard.com/badge/github.com/anatomi/corral)](https://goreportcard.com/report/github.com/anatomi/corral)
+[![GoDoc](https://godoc.org/github.com/anatomi/corral?status.svg)](https://godoc.org/github.com/anatomi/corral)
 
 <p align="center">
     <img src="img/logo.svg" width="50%"/>
@@ -67,7 +67,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ISE-SMILE/corral"
+	"github.com/anatomi/corral"
 )
 
 
@@ -142,11 +142,11 @@ In short, setup credentials in `.aws/credentials` as one would with any other AW
 
 ## Configuration
 
-There are a number of ways to specify configuraiton for corral applications. To hard-code configuration, there are a variety of [Options](https://godoc.org/github.com/ISE-SMILE/corral#Option) that may be used when instantiating a Job.
+There are a number of ways to specify configuraiton for corral applications. To hard-code configuration, there are a variety of [Options](https://godoc.org/github.com/anatomi/corral#Option) that may be used when instantiating a Job.
 
 Configuration values are used in the order, with priority given to whichever location is set first:
 
-1. Hard-coded job [Options](https://godoc.org/github.com/ISE-SMILE/corral#Option).
+1. Hard-coded job [Options](https://godoc.org/github.com/anatomi/corral#Option).
 1. Command line flags
 1. Environment variables
 1. Configuration file

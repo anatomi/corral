@@ -3,7 +3,7 @@ package corcache
 import (
 	"bytes"
 	"fmt"
-	"github.com/ISE-SMILE/corral/internal/pkg/corfs"
+	"github.com/anatomi/corral/internal/pkg/corfs"
 	"io"
 	"path/filepath"
 	"strings"

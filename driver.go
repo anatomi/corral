@@ -3,7 +3,7 @@ package corral
 import (
 	"context"
 	"fmt"
-	"github.com/ISE-SMILE/corral/internal/pkg/corcache"
+	"github.com/anatomi/corral/internal/pkg/corcache"
 	"io"
 	"math/rand"
 	"os"
@@ -22,7 +22,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	pb "gopkg.in/cheggaaa/pb.v1"
 
-	"github.com/ISE-SMILE/corral/internal/pkg/corfs"
+	"github.com/anatomi/corral/internal/pkg/corfs"
 
 	flag "github.com/spf13/pflag"
 )

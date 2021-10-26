@@ -15,12 +15,12 @@ import (
 	"sync/atomic"
 	"syscall"
 
-	"github.com/ISE-SMILE/corral/internal/pkg/corwhisk"
+	"github.com/anatomi/corral/internal/pkg/corwhisk"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 
-	"github.com/ISE-SMILE/corral/internal/pkg/corfs"
+	"github.com/anatomi/corral/internal/pkg/corfs"
 )
 
 var (
