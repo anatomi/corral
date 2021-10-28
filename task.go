@@ -12,6 +12,8 @@ type Phase int
 const (
 	MapPhase Phase = iota
 	ReducePhase
+	SortMapPhase
+	SortReducePhase
 )
 
 // task defines a serialized description of a single unit of work
@@ -33,13 +35,13 @@ type taskResult struct {
 	BytesRead    int
 	BytesWritten int
 
-	Log 		 string
+	Log string
 
-	HId string `json:"HId"` //host identifier
-	CId string `json:"CId"` //runtime identifier
-	JId string `json:"JId"` //job identifier
-	RId string `json:"RId"` //request identifier (by platform)
-	CStart int64 `json:"cStart"` //start of runtime
-	EStart int64 `json:"eStart"` //start of request
-	EEnd int64 `json:"eEnd"` //end of request
+	HId    string `json:"HId"`    //host identifier
+	CId    string `json:"CId"`    //runtime identifier
+	JId    string `json:"JId"`    //job identifier
+	RId    string `json:"RId"`    //request identifier (by platform)
+	CStart int64  `json:"cStart"` //start of runtime
+	EStart int64  `json:"eStart"` //start of request
+	EEnd   int64  `json:"eEnd"`   //end of request
 }
