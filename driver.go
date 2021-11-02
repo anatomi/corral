@@ -118,7 +118,7 @@ func NewDriver(job *Job, options ...Option) *Driver {
 			log.Debugf("failed to init cache, %+v", err)
 			panic(err)
 		} else {
-			log.Infof("using cache %s", c.Cache)
+			log.Infof("using cache %+v", c.Cache)
 		}
 		d.cache = cache
 	}
@@ -494,7 +494,7 @@ func (d *Driver) WithBackend(backendType *string) {
 		} else if *backendType == "whisk" {
 			d.executor = newWhiskExecutor(viper.GetString("lambdaFunctionName"))
 		} else {
-			log.Warn("unknowen backend flag %s", *backendType)
+			log.Warnf("unknowen backend flag %+v", *backendType)
 		}
 	}
 }

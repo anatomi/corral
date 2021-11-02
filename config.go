@@ -27,6 +27,8 @@ func setupDefaults() {
 		"lambdaMemory":       1500,
 		"lambdaTimeout":      180,
 		"lambdaManageRole":   true,
+		"lambdaS3Key":        "",
+		"lambdaS3Bucket":     "",
 		"cleanup":            true,
 		"durable":            false, //Should Intermeidiate data be flushed to the filesystem (in conflict with cleanup)
 		"verbose":            false,

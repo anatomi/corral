@@ -1,8 +1,6 @@
 package corlambda
 
 import (
-	"crypto/sha256"
-	"encoding/base64"
 	"testing"
 
 	"github.com/aws/aws-sdk-go/service/lambda/lambdaiface"
@@ -63,16 +61,35 @@ func (d *lambdaDeployMock) DeleteFunction(input *lambda.DeleteFunctionInput) (*l
 	return nil, nil
 }
 
+type lambdaMockDeploymentPackage struct {
+	wantsUpdate bool
+}
+
+func (l lambdaMockDeploymentPackage) Package() error {
+	return nil
+}
+
+func (l lambdaMockDeploymentPackage) NeedsUpdate(cfg *lambda.FunctionConfiguration) bool {
+	return l.wantsUpdate
+}
+
+func (l lambdaMockDeploymentPackage) Prepare() (*lambda.FunctionCode, error) {
+	return &lambda.FunctionCode{
+		ZipFile: []byte("mock file"),
+	}, nil
+}
+
 func TestFunctionNeedsUpdate(t *testing.T) {
-	functionCode := []byte("function code")
-	codeHash := sha256.New()
-	codeHash.Write(functionCode)
-	codeHashDigest := base64.StdEncoding.EncodeToString(codeHash.Sum(nil))
 
-	cfg := &lambda.FunctionConfiguration{CodeSha256: aws.String(codeHashDigest)}
+	code := &FunctionConfig{
+		code: []byte("function code"),
+	}
 
-	assert.True(t, functionNeedsUpdate([]byte("not function code"), cfg))
-	assert.False(t, functionNeedsUpdate(functionCode, cfg))
+	cfg := &lambda.FunctionConfiguration{CodeSha256: aws.String(code.hash())}
+
+	yes := &FunctionConfig{code: []byte("not function code")}
+	assert.True(t, yes.NeedsUpdate(cfg))
+	assert.False(t, code.NeedsUpdate(cfg))
 }
 
 func TestInvoke(t *testing.T) {
@@ -119,10 +136,11 @@ func TestCreateFunction(t *testing.T) {
 	client := &LambdaClient{mock}
 
 	config := &FunctionConfig{
-		Name:       "test function",
-		RoleARN:    "testARN",
-		Timeout:    10,
-		MemorySize: 1000,
+		FunctionDeployment: lambdaMockDeploymentPackage{},
+		Name:               "test function",
+		RoleARN:            "testARN",
+		Timeout:            10,
+		MemorySize:         1000,
 	}
 
 	err := client.DeployFunction(config)
@@ -148,10 +166,11 @@ func TestUpdateFunction(t *testing.T) {
 	client := &LambdaClient{mock}
 
 	config := &FunctionConfig{
-		Name:       "test function",
-		RoleARN:    "testARN",
-		Timeout:    10,
-		MemorySize: 1000,
+		FunctionDeployment: lambdaMockDeploymentPackage{true},
+		Name:               "test function",
+		RoleARN:            "testARN",
+		Timeout:            10,
+		MemorySize:         1000,
 	}
 
 	err := client.DeployFunction(config)

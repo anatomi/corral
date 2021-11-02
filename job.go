@@ -27,9 +27,10 @@ type Job struct {
 	Map           Mapper
 	Reduce        Reducer
 	PartitionFunc PartitionFunc
-	PauseFunc     PauseFunc
-	StopFunc      StopFunc
-	HintFunc      HintFunc
+
+	PauseFunc PauseFunc
+	StopFunc  StopFunc
+	HintFunc  HintFunc
 
 	fileSystem  corfs.FileSystem
 	cacheSystem corcache.CacheSystem
@@ -43,6 +44,12 @@ type Job struct {
 
 	activationLog chan taskResult
 	wg            sync.WaitGroup
+}
+
+//type SortFunc func() int
+
+type SortJob struct {
+	Job
 }
 
 func (j *Job) collectActivation(result taskResult) {
@@ -149,10 +156,11 @@ func (j *Job) runReducer(binID uint) error {
 	// Open emitter for output data
 	path = j.fileSystem.Join(j.outputPath, fmt.Sprintf("output-part-%d", binID))
 	emitWriter, err := j.fileSystem.OpenWriter(path)
-	defer emitWriter.Close()
+
 	if err != nil {
 		return err
 	}
+	defer emitWriter.Close()
 
 	data := make(map[string][]string, 0)
 	var bytesRead int64
@@ -282,6 +290,14 @@ func (j *Job) writeActivationLog() {
 		logName = filepath.Join(dir, logName)
 	}
 
+	writeHeder := true
+
+	//we asume the log already exsists...
+	_, err := os.Stat(logName)
+	if err == nil {
+		writeHeder = false
+	}
+
 	logFile, err := os.OpenFile(logName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
 		log.Errorf("failed to open activation log @ %s - %f", logName, err)
@@ -290,14 +306,16 @@ func (j *Job) writeActivationLog() {
 	writer := bufio.NewWriter(logFile)
 	logWriter := csv.NewWriter(writer)
 
-	//write header
-	err = logWriter.Write([]string{
-		"JId", "CId", "HId", "RId", "CStart", "EStart", "EEnd", "Read", "Written",
-		"CMEM", "CMBS", "CRBS", "CSP", "CMC", "CTO",
-	})
-	if err != nil {
-		log.Errorf("failed to open activation log @ %s - %f", logName, err)
-		return
+	if writeHeder {
+		//write header
+		err = logWriter.Write([]string{
+			"JId", "CId", "HId", "RId", "CStart", "EStart", "EEnd", "Read", "Written",
+			"CMEM", "CMBS", "CRBS", "CSP", "CMC", "CTO",
+		})
+		if err != nil {
+			log.Errorf("failed to open activation log @ %s - %f", logName, err)
+			return
+		}
 	}
 	j.wg.Add(1)
 	for task := range j.activationLog {

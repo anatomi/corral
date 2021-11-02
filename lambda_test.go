@@ -59,21 +59,21 @@ func TestHandleRequest(t *testing.T) {
 		HId:          mockHostID(),
 		RId:          mockHostID(),
 		CId:          lambdaDriver.runtimeID,
-		JId:          "0_0",//phase_bin
+		JId:          "0_0_0", //job_phase_bin
 		CStart:       lambdaDriver.Start.UnixNano(),
 		EStart:       0,
 		EEnd:         0,
 	}
 
-	output, err := handle(lambdaDriver,mockHostID,mockHostID)(testTask)
+	output, err := handle(lambdaDriver, mockHostID, mockHostID)(testTask)
 	assert.Nil(t, err)
 	output.EStart = 0
 	output.EEnd = 0
 	assert.Equal(t, mockTaskResult, output)
 
 	testTask.Phase = ReducePhase
-	mockTaskResult.JId = "1_0"
-	output, err = handle(lambdaDriver,mockHostID,mockHostID)(testTask)
+	mockTaskResult.JId = "0_1_0"
+	output, err = handle(lambdaDriver, mockHostID, mockHostID)(testTask)
 
 	assert.Nil(t, err)
 	output.EStart = 0
@@ -162,5 +162,5 @@ func TestDeployFunction(t *testing.T) {
 	}
 
 	viper.SetDefault("lambdaManageRole", false) // Disable testing role deployment
-	executor.Deploy()
+	executor.Deploy(&Driver{})
 }

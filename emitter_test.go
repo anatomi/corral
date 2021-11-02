@@ -74,6 +74,10 @@ type mockFs struct {
 	writers map[string]*testWriteCloser
 }
 
+func (m *mockFs) Split(path string) []string {
+	return strings.Split(path, "/")
+}
+
 func (m *mockFs) ListFiles(string) ([]corfs.FileInfo, error) {
 	return []corfs.FileInfo{}, nil
 }
