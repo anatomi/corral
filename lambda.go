@@ -53,7 +53,7 @@ func lambdaHostID() string {
 		reader := bufio.NewScanner(f)
 		for reader.Scan() {
 			line := reader.Text()
-			if idx:=strings.Index(line,"sandbox-root-");idx>=0 {
+			if idx := strings.Index(line, "sandbox-root-"); idx >= 0 {
 				line = line[idx:]
 				lambdaNodeName = line[13:19]
 				return lambdaNodeName
@@ -72,12 +72,12 @@ func lambdaHostID() string {
 }
 
 func handleRequest(ctx context.Context, task task) (string, error) {
-	result, err := handle(lambdaDriver, lambdaHostID,func() string{
+	result, err := handle(lambdaDriver, lambdaHostID, func() string {
 
 		if lc, ok := lambdacontext.FromContext(ctx); ok {
 			rId := lc.AwsRequestID
 			sn := lambdacontext.LogStreamName
-			return fmt.Sprintf("%s_%s",rId,sn)
+			return fmt.Sprintf("%s_%s", rId, sn)
 		}
 
 		return os.Getenv("AWS_LAMBDA_LOG_STREAM_NAME")
@@ -160,7 +160,7 @@ func (l *lambdaExecutor) RunReducer(job *Job, jobNumber int, binID uint) error {
 		Phase:           ReducePhase,
 		BinID:           binID,
 		FileSystemType:  corfs.FilesystemType(job.fileSystem),
-		CacheSystemType:  corcache.CacheSystemTypes(job.cacheSystem),
+		CacheSystemType: corcache.CacheSystemTypes(job.cacheSystem),
 		WorkingLocation: job.outputPath,
 		Cleanup:         job.config.Cleanup,
 	}
@@ -196,6 +196,8 @@ func (l *lambdaExecutor) Deploy(driver *Driver) error {
 		RoleARN:    roleARN,
 		Timeout:    viper.GetInt64("lambdaTimeout"),
 		MemorySize: viper.GetInt64("lambdaMemory"),
+		S3Key:      viper.GetString("lambdaS3Key"),
+		S3Bucket:   viper.GetString("lambdaS3Bucket"),
 	}
 
 	if driver.cache != nil {
@@ -217,8 +219,8 @@ func (l *lambdaExecutor) Undeploy() error {
 	iam_err := l.IAMClient.DeletePermissions(corralRoleName)
 	if iam_err != nil {
 		log.Errorf("Error when undeploying IAM permissions: %s", err)
-		if err != nil{
-			err = fmt.Errorf("Error when undeploying %s, %s",err,iam_err)
+		if err != nil {
+			err = fmt.Errorf("Error when undeploying %s, %s", err, iam_err)
 		} else {
 			err = iam_err
 		}

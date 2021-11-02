@@ -1,12 +1,14 @@
 package corlambda
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"github.com/ISE-SMILE/corral/internal/pkg/corbuild"
 	"github.com/ISE-SMILE/corral/internal/pkg/corcache"
+	"github.com/aws/aws-sdk-go/service/s3"
 	"strings"
 
 	lambdaMessages "github.com/aws/aws-lambda-go/lambda/messages"
@@ -25,7 +27,6 @@ const MaxLambdaRetries = 3
 // deploying and invoking lambda functions
 type LambdaClient struct {
 	Client lambdaiface.LambdaAPI
-
 }
 
 type LambdaCacheConfigInjector interface {
@@ -33,13 +34,84 @@ type LambdaCacheConfigInjector interface {
 	ConfigureLambda(*lambda.CreateFunctionInput) error
 }
 
+//Wrapping Package generation and deployment-prepration into an interface for mocking and extension
+type FunctionDeployment interface {
+	Package() error
+	NeedsUpdate(cfg *lambda.FunctionConfiguration) bool
+	Prepare() (*lambda.FunctionCode, error)
+}
+
 // FunctionConfig holds the configuration of an individual Lambda function
 type FunctionConfig struct {
+	FunctionDeployment
 	Name                string
 	RoleARN             string
 	Timeout             int64
 	MemorySize          int64
 	CacheConfigInjector corcache.CacheConfigIncector
+
+	code     []byte
+	S3Key    string
+	S3Bucket string
+	CodeHash string
+}
+
+func (d *FunctionConfig) hash() string {
+	codeHash := sha256.New()
+	codeHash.Write(d.code)
+	codeHashDigest := base64.StdEncoding.EncodeToString(codeHash.Sum(nil))
+	d.CodeHash = codeHashDigest
+	return d.CodeHash
+}
+
+func (d *FunctionConfig) NeedsUpdate(cfg *lambda.FunctionConfiguration) bool {
+	if d.FunctionDeployment != nil {
+		return d.FunctionDeployment.NeedsUpdate(cfg)
+	}
+
+	if d.CodeHash == "" {
+		d.hash()
+	}
+
+	return d.CodeHash != *cfg.CodeSha256
+}
+
+func (d *FunctionConfig) Prepare() (*lambda.FunctionCode, error) {
+	if d.FunctionDeployment != nil {
+		return d.FunctionDeployment.Prepare()
+	}
+
+	if d.S3Key != "" && d.S3Bucket != "" {
+		log.Infof("Uploading deployment package to S3 %s/%s", d.S3Bucket, d.S3Key)
+		sess, err := session.NewSession()
+		if err != nil {
+			return nil, err
+		}
+		s3Client := s3.New(sess)
+
+		req, _ := s3Client.PutObjectRequest(&s3.PutObjectInput{
+			Body:   bytes.NewReader(d.code),
+			Bucket: &d.S3Bucket,
+			Key:    &d.S3Key,
+		})
+
+		err = req.Send()
+		if err != nil {
+			log.Errorf("failed to upload deployment to S3 %e", err)
+			return nil, err
+		}
+
+		return &lambda.FunctionCode{
+			S3Bucket: &d.S3Bucket,
+			S3Key:    &d.S3Bucket,
+		}, nil
+	} else {
+		log.Infof("Uploading deployment as zip")
+		return &lambda.FunctionCode{
+			ZipFile: d.code,
+		}, nil
+	}
+
 }
 
 // NewLambdaClient initializes a new LambdaClient
@@ -52,11 +124,14 @@ func NewLambdaClient() *LambdaClient {
 	}
 }
 
-func functionNeedsUpdate(functionCode []byte, cfg *lambda.FunctionConfiguration) bool {
-	codeHash := sha256.New()
-	codeHash.Write(functionCode)
-	codeHashDigest := base64.StdEncoding.EncodeToString(codeHash.Sum(nil))
-	return codeHashDigest != *cfg.CodeSha256
+func (d *FunctionConfig) Package() error {
+	if d.FunctionDeployment != nil {
+		return d.FunctionDeployment.Package()
+	}
+
+	code, _, err := corbuild.BuildPackage("main")
+	d.code = code
+	return err
 }
 
 func functionConfigNeedsUpdate(function *FunctionConfig, cfg *lambda.FunctionConfiguration) bool {
@@ -71,23 +146,26 @@ func (l *LambdaClient) updateFunctionSettings(function *FunctionConfig) error {
 		Timeout:      aws.Int64(function.Timeout),
 		MemorySize:   aws.Int64(function.MemorySize),
 	}
+
+	//TODO: we might need to apply cache changes, how do we check for that?
+
 	_, err := l.Client.UpdateFunctionConfiguration(params)
 	return err
 }
 
 // DeployFunction deploys the current directory as a lamba function
 func (l *LambdaClient) DeployFunction(function *FunctionConfig) error {
-	functionCode, _, err := corbuild.BuildPackage("main")
+	err := function.Package()
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	exists, err := l.getFunction(function.Name)
 	if exists != nil && err == nil {
 		updated := false
-		if functionNeedsUpdate(functionCode, exists.Configuration) {
+		if function.NeedsUpdate(exists.Configuration) {
 			log.Infof("Updating Lambda function code for '%s'", function.Name)
-			err = l.updateFunction(function, functionCode)
+			err = l.updateFunction(function)
 			updated = true
 		}
 		if functionConfigNeedsUpdate(function, exists.Configuration) {
@@ -102,7 +180,7 @@ func (l *LambdaClient) DeployFunction(function *FunctionConfig) error {
 	}
 
 	log.Infof("Creating Lambda function '%s'", function.Name)
-	return l.createFunction(function, functionCode)
+	return l.createFunction(function)
 }
 
 // DeleteFunction tears down the given function
@@ -120,20 +198,30 @@ func (l *LambdaClient) DeleteFunction(functionName string) error {
 }
 
 // updateFunction updates the lambda function with the given name with the given code as function binary
-func (l *LambdaClient) updateFunction(function *FunctionConfig, code []byte) error {
+func (l *LambdaClient) updateFunction(function *FunctionConfig) error {
+	funcCode, err := function.Prepare()
+	if err != nil {
+		return err
+	}
 	updateArgs := &lambda.UpdateFunctionCodeInput{
-		ZipFile:      code,
-		FunctionName: aws.String(function.Name),
+		FunctionName:    aws.String(function.Name),
+		ImageUri:        funcCode.ImageUri,
+		S3Bucket:        funcCode.S3Bucket,
+		S3Key:           funcCode.S3Key,
+		S3ObjectVersion: funcCode.S3ObjectVersion,
+		ZipFile:         funcCode.ZipFile,
 	}
 
-	_, err := l.Client.UpdateFunctionCode(updateArgs)
+	_, err = l.Client.UpdateFunctionCode(updateArgs)
+	//XXX: should we delete the deployment zip if this fails?
 	return err
 }
 
 // createFunction creates a lambda function with the given name and uses code as the function binary
-func (l *LambdaClient) createFunction(function *FunctionConfig, code []byte) error {
-	funcCode := &lambda.FunctionCode{
-		ZipFile: code,
+func (l *LambdaClient) createFunction(function *FunctionConfig) error {
+	funcCode, err := function.Prepare()
+	if err != nil {
+		return err
 	}
 
 	//injecting config values into deployment
@@ -152,13 +240,13 @@ func (l *LambdaClient) createFunction(function *FunctionConfig, code []byte) err
 		MemorySize:   aws.Int64(function.MemorySize),
 		Environment:  env,
 	}
-	
+
 	//we need to inject a cache config
 	if function.CacheConfigInjector != nil {
-		
-		if li,ok := function.CacheConfigInjector.(LambdaCacheConfigInjector); ok {
+
+		if li, ok := function.CacheConfigInjector.(LambdaCacheConfigInjector); ok {
 			err := li.ConfigureLambda(createArgs)
-			if err != nil{
+			if err != nil {
 				log.Warnf("failed to inject cache config into function")
 				return err
 			}
@@ -168,7 +256,8 @@ func (l *LambdaClient) createFunction(function *FunctionConfig, code []byte) err
 		}
 	}
 
-	_, err := l.Client.CreateFunction(createArgs)
+	_, err = l.Client.CreateFunction(createArgs)
+	//XXX: should we delete the deployment zip if this fails?
 	return err
 }
 
