@@ -27,8 +27,9 @@ func setupDefaults() {
 		"lambdaMemory":       1500,
 		"lambdaTimeout":      180,
 		"lambdaManageRole":   true,
-		"lambdaS3Key":        "",
-		"lambdaS3Bucket":     "",
+		"lambdaS3Key":        "corral_code.zip",
+		"lambdaS3Bucket":     "corral-code-bucket",
+		"lambdaEfsPath":	  "/mnt/efs", // path must always start with "/mnt/"
 		"cleanup":            true,
 		"durable":            false, //Should Intermeidiate data be flushed to the filesystem (in conflict with cleanup)
 		"verbose":            false,
@@ -41,7 +42,7 @@ func setupDefaults() {
 		"remoteLoggingHost":  "",
 		"logName":            "activations",
 
-		"cache": "", //coresponse to corcache.CacheSystemType
+		"cache": 4, //coresponse to corcache.CacheSystemType (4 for EFS cache)
 
 		"cacheSize": uint64(10 * 1024 * 1024), //corosponse to corcache.Local
 
@@ -49,6 +50,13 @@ func setupDefaults() {
 		"kubernetesNamespace":    "", //
 		"kubernetesStorageClass": "",
 		"redisPort":              nil,
+
+		"efsFilesystemName": "corral_efs_filesystem",
+		"efsVPCSubnetIds": "", // List of subnet ids associated with VPC separated by ';'"
+		"efsVPCSecurityGroupIds": "", // Security group id asociated with VPC, i.e.: "sg-085912345678*****"
+		"efsAccessPointName": "corral_efs_accesspoint",
+		"efsAccessPointPath": "/cache",
+
 	}
 	for key, value := range defaultSettings {
 		viper.SetDefault(key, value)

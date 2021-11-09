@@ -62,11 +62,20 @@ func (j *Job) collectActivation(result taskResult) {
 func (j *Job) runMapper(mapperID uint, splits []inputSplit) error {
 	//check if we can use a cacheFS instead
 	var fs corfs.FileSystem = j.fileSystem
+	var outputPath = j.outputPath
 	if j.cacheSystem != nil {
+	
 		fs = j.cacheSystem
-	}
+		log.Infof("Cache System Type: %#v", corcache.CacheSystemTypes(fs))
 
-	emitter := newMapperEmitter(j.intermediateBins, mapperID, j.outputPath, fs)
+		// check if cache System is EFS -> if YES: configure j.outputPath to be "lambdaEfsPath"
+		if corcache.CacheSystemTypes(fs) == corcache.EFS {
+			outputPath = viper.GetString("lambdaEfsPath")
+		}
+	}
+	log.Infof("Job location %s", outputPath)
+
+	emitter := newMapperEmitter(j.intermediateBins, mapperID, outputPath, fs)
 	if j.PartitionFunc != nil {
 		emitter.partitionFunc = j.PartitionFunc
 	}
@@ -107,6 +116,7 @@ func (j *Job) runMapperSplit(split inputSplit, emitter Emitter) error {
 	if err != nil {
 		return err
 	}
+	log.Debugf("Input source: %#v", inputSource)
 
 	scanner := bufio.NewScanner(inputSource)
 	var bytesRead int64
@@ -142,12 +152,14 @@ func (j *Job) runMapperSplit(split inputSplit, emitter Emitter) error {
 func (j *Job) runReducer(binID uint) error {
 	//check if we can use a cacheFS instead
 	var fs corfs.FileSystem = j.fileSystem
+	var outputPath = j.outputPath
 	if j.cacheSystem != nil {
 		fs = j.cacheSystem
+		outputPath = viper.GetString("lambdaEfsPath")
 	}
 
 	// Determine the intermediate data files this reducer is responsible for
-	path := fs.Join(j.outputPath, fmt.Sprintf("map-bin%d-*", binID))
+	path := fs.Join(outputPath, fmt.Sprintf("map-bin%d-*", binID))
 	files, err := fs.ListFiles(path)
 	if err != nil {
 		return err

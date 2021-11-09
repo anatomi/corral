@@ -84,6 +84,7 @@ func newConfig() *config {
 		MaxConcurrency:  viper.GetInt("maxConcurrency"),
 		WorkingLocation: viper.GetString("workingLocation"),
 		Cleanup:         viper.GetBool("cleanup"),
+		Cache:			 corcache.CacheSystemType(viper.GetInt("cache")),
 	}
 }
 
@@ -334,16 +335,8 @@ func (d *Driver) run() {
 		os.Exit(-10)
 	}
 
-	//TODO: do preflight checks e.g. check if in/out is accassible...
-	//TODO introduce interface for deploy/undeploy
-	if lBackend, ok := d.executor.(platform); ok {
-		err := lBackend.Deploy(d)
-		if err != nil {
-			panic(err)
-		}
-	}
-
 	if d.cache != nil {
+		log.Infof("Running job with cache system")
 		err := d.cache.Deploy()
 		if err != nil {
 			log.Errorf("failed to deploy cache, %+v", err)
@@ -351,7 +344,17 @@ func (d *Driver) run() {
 
 		err = d.cache.Init()
 		if err != nil {
-			log.Errorf("failed to initilized cache, %+v", err)
+			log.Errorf("failed to initilized cache")
+			panic(err)
+		}
+	}
+
+	//TODO: do preflight checks e.g. check if in/out is accassible...
+	//TODO introduce interface for deploy/undeploy
+	if lBackend, ok := d.executor.(platform); ok {
+		err := lBackend.Deploy(d)
+		if err != nil {
+			panic(err)
 		}
 	}
 
@@ -398,7 +401,16 @@ func (d *Driver) run() {
 
 		*job.config = *d.config
 
+		startMap := time.Now()
 		d.runMapPhase(job, idx, inputs)
+		endMap := time.Now()
+		fmt.Printf("Map Execution Time: %s\n", endMap.Sub(startMap))
+
+		startReduce := time.Now()
+		d.runMapPhase(job, idx, inputs)
+		endReduce := time.Now()
+		fmt.Printf("Reduce Execution Time: %s\n", endReduce.Sub(startReduce))
+
 		d.runReducePhase(job, idx)
 
 		// Set inputs of next job to be outputs of current job
@@ -459,6 +471,8 @@ func (d *Driver) Main() {
 	}
 
 	d.config.Inputs = append(d.config.Inputs, flag.Args()...)
+	log.Infof("backend %s", *backendFlag)
+
 	d.WithBackend(backendFlag)
 
 	if *outputDir != "" {

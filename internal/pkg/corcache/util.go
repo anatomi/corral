@@ -7,6 +7,7 @@ import (
 	"github.com/anatomi/corral/internal/pkg/corfs"
 	"github.com/stretchr/testify/assert"
 	"math/rand"
+	"time"
 	"os"
 	"path/filepath"
 	"testing"
@@ -291,4 +292,18 @@ func test_Flush(t *testing.T,local CacheSystem) {
 		t.Fatalf("failed read flushed file %s , %+v",file,err)
 		assert.Equal(t, buf,files[i])
 	}
+}
+
+const charset = "abcdefghijklmnopqrstuvwxyz" +
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+var seededRand *rand.Rand = rand.New(
+  rand.NewSource(time.Now().UnixNano()))
+
+func randomToken(length int) string {
+  b := make([]byte, length)
+  for i := range b {
+    b[i] = charset[seededRand.Intn(len(charset))]
+  }
+  return string(b)
 }

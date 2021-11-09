@@ -2,7 +2,7 @@
 
 > Serverless MapReduce
 
-> This fork added an OpenWhisk backend and the ability to use Minio.io instad of S3. Also this repo uses go modules for easier compileing ;)
+> This fork added the ability to use AWS Elastic File System to store intermediate data (as a cache).
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/anatomi/corral)](https://goreportcard.com/report/github.com/anatomi/corral)
 [![GoDoc](https://godoc.org/github.com/anatomi/corral?status.svg)](https://godoc.org/github.com/anatomi/corral)
@@ -170,6 +170,7 @@ Below are the config settings that may be changed.
 * `lambdaTimeout` (int64) - The timeout (maximum function duration) in seconds of created Lambda functions. See [AWS lambda docs](https://docs.aws.amazon.com/lambda/latest/dg/resource-model.html) for details. (Default: `180`)
 * `lambdaMemory` (int64) - The maximum memory that a Lambda function may use. See [AWS lambda docs](https://docs.aws.amazon.com/lambda/latest/dg/resource-model.html) for details. (Default: `1500`)
   `requestPerMinute` (int64) - The number of request to the FaaS platform per Minute (Default: `200`)
+  `lambdaEfsPath` (string) - Local mount path for EFS (Default: `/mnt/efs`)
 
 #### Lambda Settings
 * `lambdaManageRole` (bool) - Whether corral should manage creating an IAM role for Lambda execution. (Default: `true`)
@@ -183,6 +184,13 @@ Below are the config settings that may be changed.
 * `minioHost` (string) - The address of the minio server, this will be injected into the function code at runtime.
 * `minioUser` (string) - The user for the minio account
 * `minioKey`  (string) - The access key for the minio accout.
+
+#### EFS Settings
+* `efsFilesystemName` (string) - The name of the fileesystem to be created. (Default: `corral_efs_filesystem`)
+* `efsVPCSubnetIds` (string) - VPC subnet ids in which EFS mount targets are created for EFS.
+* `efsVPCSecurityGroupIds` (string) - Security group id.
+* `efsAccessPointName` (string) - The name of the access point created for the filesystem. (Default: `corral_efs_accesspoint`)
+* `efsAccessPointPath` (string) - The root directory path for the access point. (Default: `/cache`)
 
 ### Command Line Flags
 

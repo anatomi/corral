@@ -6,10 +6,11 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/ISE-SMILE/corral/internal/pkg/corbuild"
-	"github.com/ISE-SMILE/corral/internal/pkg/corcache"
+	"github.com/anatomi/corral/internal/pkg/corbuild"
+	"github.com/anatomi/corral/internal/pkg/corcache"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"strings"
+	"os"
 
 	lambdaMessages "github.com/aws/aws-lambda-go/lambda/messages"
 	"github.com/aws/aws-sdk-go/aws"
@@ -83,6 +84,7 @@ func (d *FunctionConfig) Prepare() (*lambda.FunctionCode, error) {
 
 	if d.S3Key != "" && d.S3Bucket != "" {
 		log.Infof("Uploading deployment package to S3 %s/%s", d.S3Bucket, d.S3Key)
+		os.Setenv("AWS_SDK_LOAD_CONFIG", "true")
 		sess, err := session.NewSession()
 		if err != nil {
 			return nil, err
@@ -103,7 +105,7 @@ func (d *FunctionConfig) Prepare() (*lambda.FunctionCode, error) {
 
 		return &lambda.FunctionCode{
 			S3Bucket: &d.S3Bucket,
-			S3Key:    &d.S3Bucket,
+			S3Key:    &d.S3Key,
 		}, nil
 	} else {
 		log.Infof("Uploading deployment as zip")
@@ -256,8 +258,22 @@ func (l *LambdaClient) createFunction(function *FunctionConfig) error {
 		}
 	}
 
-	_, err = l.Client.CreateFunction(createArgs)
+	
+
+	createdFunction, err := l.Client.CreateFunction(createArgs)
+	log.Infof("Lambda state: %s", *createdFunction.State)
+	for *createdFunction.State != "Active" {
+		getConfigInput := &lambda.GetFunctionConfigurationInput{
+			FunctionName: createdFunction.FunctionName,
+		}
+		result, err := l.Client.GetFunctionConfiguration(getConfigInput)
+		if err != nil {
+			return err
+		}
+		createdFunction = result
+	}
 	//XXX: should we delete the deployment zip if this fails?
+	fmt.Println("Function is avaiable")
 	return err
 }
 

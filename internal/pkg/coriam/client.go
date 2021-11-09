@@ -72,6 +72,30 @@ const AttachPolicyDocument = `{
                 "s3:*"
             ],
             "Resource": "arn:aws:s3:::*"
+        },
+		{
+            "Effect": "Allow",
+            "Action": [
+                "elasticfilesystem:ClientMount",
+                "elasticfilesystem:ClientRootAccess",
+                "elasticfilesystem:ClientWrite",
+                "elasticfilesystem:DescribeMountTargets"
+            ],
+            "Resource": "*"
+        },
+		{
+            "Effect": "Allow",
+            "Action": [
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents",
+                "ec2:CreateNetworkInterface",
+                "ec2:DescribeNetworkInterfaces",
+                "ec2:DeleteNetworkInterface",
+                "ec2:AssignPrivateIpAddresses",
+                "ec2:UnassignPrivateIpAddresses"
+            ],
+            "Resource": "*"
         }
     ]
 }`

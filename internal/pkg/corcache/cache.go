@@ -50,28 +50,41 @@ func NewCacheSystem(fsType CacheSystemType) (CacheSystem,error) {
 		case Local:
 			//TODO: make this configururable
 			cs = NewLocalInMemoryProvider(viper.GetUint64("cacheSize"))
-	case Redis:
-		cs,err = NewRedisBackedCache(DeploymentType(viper.GetInt("redisDeploymentType")))
-		if err != nil {
-			log.Debug("failed to init redis cache, %+v",err)
-			return nil,err
-		}
-
-	default:
-		return nil, fmt.Errorf("unknown cache type or not yet implemented %d",fsType)
+		case Redis:
+			cs,err = NewRedisBackedCache(DeploymentType(viper.GetInt("redisDeploymentType")))
+			if err != nil {
+				log.Debug("failed to init redis cache, %+v",err)
+				return nil,err
+			}
+		case EFS:
+			cs, err = NewEFSCache()
+			if err != nil {
+				log.Debug("failed to init EFS cache, %+v",err)
+				return nil,err
+			}
+		default:
+			return nil, fmt.Errorf("unknown cache type or not yet implemented %d",fsType)
 	}
 
 	return cs,nil
 }
 
 // CacheSystemTypes retunrs a type for a given CacheSystem or the NoCache type.
-func CacheSystemTypes(fs CacheSystem) CacheSystemType {
+func CacheSystemTypes(fs corfs.FileSystem) CacheSystemType {
 	if fs == nil{
 		return NoCache
 	}
 
 	if _,ok := fs.(*LocalCache);ok {
 		return Local
+	}
+
+	if _,ok := fs.(*AWSEFSCache);ok {
+		return EFS
+	}
+
+	if _,ok := fs.(*RedisBackedCache);ok {
+		return Redis
 	}
 	return NoCache
 }
