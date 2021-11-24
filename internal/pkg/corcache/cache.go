@@ -53,13 +53,13 @@ func NewCacheSystem(fsType CacheSystemType) (CacheSystem,error) {
 		case Redis:
 			cs,err = NewRedisBackedCache(DeploymentType(viper.GetInt("redisDeploymentType")))
 			if err != nil {
-				log.Debug("failed to init redis cache, %+v",err)
+				log.Debugf("failed to init redis cache, %+v",err)
 				return nil,err
 			}
 		case EFS:
 			cs, err = NewEFSCache()
 			if err != nil {
-				log.Debug("failed to init EFS cache, %+v",err)
+				log.Debugf("failed to init EFS cache, %+v",err)
 				return nil,err
 			}
 		default:

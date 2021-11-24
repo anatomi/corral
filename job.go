@@ -72,6 +72,9 @@ func (j *Job) runMapper(mapperID uint, splits []inputSplit) error {
 		if corcache.CacheSystemTypes(fs) == corcache.EFS {
 			outputPath = viper.GetString("lambdaEfsPath")
 		}
+		if corcache.CacheSystemTypes(fs) == corcache.Redis {
+			outputPath = ""
+		}
 	}
 	log.Infof("Job location %s", outputPath)
 
@@ -155,7 +158,13 @@ func (j *Job) runReducer(binID uint) error {
 	var outputPath = j.outputPath
 	if j.cacheSystem != nil {
 		fs = j.cacheSystem
-		outputPath = viper.GetString("lambdaEfsPath")
+		if corcache.CacheSystemTypes(fs) == corcache.EFS {
+			outputPath = viper.GetString("lambdaEfsPath")
+		}
+
+		if corcache.CacheSystemTypes(fs) == corcache.Redis {
+			outputPath = ""
+		}
 	}
 
 	// Determine the intermediate data files this reducer is responsible for

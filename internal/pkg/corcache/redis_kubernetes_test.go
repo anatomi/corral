@@ -39,7 +39,7 @@ func TestKubernetesDeployment(t *testing.T){
 	}
 
 	rcs := &RedisBackedCache{
-		DeploymentStragey: &krds,
+		DeploymentStrategy: &krds,
 		Config:            r,
 	}
 

@@ -7,6 +7,7 @@ import (
 	"github.com/anatomi/corral/internal/pkg/corfs"
 	"github.com/apache/openwhisk-client-go/whisk"
 	"github.com/aws/aws-sdk-go/service/lambda"
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/go-redis/redis/v8"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
@@ -21,7 +22,7 @@ type DeploymentType int
 const (
 	LocalDeployment DeploymentType = iota
 	KubernetesDeployment
-	AWS
+	ElasticacheDeployment
 )
 
 func NewDeploymentStrategy(deploymentType DeploymentType) (DeploymentStrategy,error) {
@@ -42,20 +43,34 @@ func NewDeploymentStrategy(deploymentType DeploymentType) (DeploymentStrategy,er
 			}
 
 			return krds,nil
-		case AWS:
-			return nil,fmt.Errorf("not yet implemented")
+		case ElasticacheDeployment:
+			log.Debug("using Elasticache based deployment")
+			ecrds := &ElasticacheRedisDeploymentStrategy{
+				NodeType:      	viper.GetString("elasticacheNodeType"),
+				EngineVersion:  viper.GetString("elasticacheEngineVersion"),
+				NumCacheNodes: 	viper.GetInt64("redisClusterSize"),
+			}
+
+			if viper.IsSet("redisPort") {
+				foo := viper.GetInt64("redisPort")
+				ecrds.NodePort = &foo
+			}
+
+			return ecrds,nil
 		default:
 			return nil,fmt.Errorf("unexpected deploymentType: %+v",deploymentType)
 	}
 }
 
 type ClientConfig struct {
-	Addrs          []string
-	DB             int
-	User           string
-	password       string
-	RouteByLatency bool
-	RouteRandomly  bool
+	Addrs           	   []string
+	DB              	   int
+	User           		   string
+	password        	   string
+	RouteByLatency  	   bool
+	RouteRandomly   	   bool
+	LambdaSubnetIds 	   []string
+	LambdaSecurityGroupIds []string
 }
 
 func (rc *ClientConfig) asOptions() *redis.UniversalOptions {
@@ -66,18 +81,18 @@ func (rc *ClientConfig) asOptions() *redis.UniversalOptions {
 		Password: rc.password,
 		RouteByLatency: rc.RouteByLatency,
 		RouteRandomly:  rc.RouteRandomly,
-
-
 	}
 }
 
 type DeploymentStrategy interface {
 	Deploy() (*ClientConfig,error)
 	Undeploy() error
+	// hasReaderEndpoint() (bool)
+
 }
 
 type RedisBackedCache struct {
-	DeploymentStragey DeploymentStrategy
+	DeploymentStrategy DeploymentStrategy
 	Client            redis.UniversalClient
 	Config            *ClientConfig
 }
@@ -91,7 +106,7 @@ func NewRedisBackedCache(deploymentType DeploymentType) (*RedisBackedCache,error
 	log.Infof("using %+v redis deployment strategy",deploymentType)
 
 	return &RedisBackedCache{
-		DeploymentStragey: ds,
+		DeploymentStrategy: ds,
 	},nil
 
 }
@@ -162,17 +177,28 @@ func (r *RedisBackedCache) Init() error {
 
 		r.Config = &conf
 	}
-
 	r.Client = redis.NewUniversalClient(r.Config.asOptions())
 
+	/*cannot access Elasticache cluster from outside the VPC
+	if r.DeploymentStrategy != ElasticacheRedisDeploymentStrategy {
+		log.Infof("Not on Elasticache")
+		_, err := r.Client.Ping(context.Background()).Result()
+	}*/
 	_, err := r.Client.Ping(context.Background()).Result()
-	return err
+	if err != nil {
+		log.Infof("Error ping %#v", err)
+	}
+	return nil
 }
 
 
 func (r *RedisBackedCache) ListFiles(pathGlob string) ([]corfs.FileInfo, error) {
+	if r.Client == nil {
+		r.initClientOnLambda()
+	}
+
 	results := make([]corfs.FileInfo,0)
-	scan := r.Client.Scan(context.Background(),0,pathGlob,0)
+	scan := r.Client.Scan(context.Background(), 0, pathGlob, 0)
 	itter := scan.Iterator()
 	for itter.Next(context.Background()) {
 		if itter.Err() != nil {
@@ -191,7 +217,11 @@ func (r *RedisBackedCache) ListFiles(pathGlob string) ([]corfs.FileInfo, error) 
 }
 
 func (r *RedisBackedCache) Stat(filePath string) (corfs.FileInfo, error) {
-	size,err := r.Client.StrLen(context.Background(),filePath).Result()
+	if r.Client == nil {
+		r.initClientOnLambda()
+	}
+
+	size,err := r.Client.StrLen(context.Background(), filePath).Result()
 	if err != nil{
 		return corfs.FileInfo{}, err
 	}
@@ -217,7 +247,11 @@ func (b *bufferedRedisReader) Close() error {
 }
 
 func (r *RedisBackedCache) OpenReader(filePath string, startAt int64) (io.ReadCloser, error) {
-	buf,err := r.Client.Get(context.Background(),filePath).Bytes()
+	if r.Client == nil {
+		r.initClientOnLambda()
+	}
+
+	buf,err := r.Client.Get(context.Background(), filePath).Bytes()
 	if err != nil {
 		return nil,err
 	} else {
@@ -249,6 +283,11 @@ func (r *RedisBackedCache) newRedisWriter(key string,buffer []byte) *bufferedRed
 	if buffer == nil{
 		buffer = []byte{}
 	}
+
+	if r.Client == nil {
+		r.initClientOnLambda()
+		
+	}
 	return &bufferedRedisWriter{
 		Buffer: bytes.NewBuffer(buffer),
 		key:    key,
@@ -257,18 +296,25 @@ func (r *RedisBackedCache) newRedisWriter(key string,buffer []byte) *bufferedRed
 }
 
 func (r *RedisBackedCache) OpenWriter(filePath string) (io.WriteCloser, error) {
+	if r.Client == nil {
+		r.initClientOnLambda()
+	}
 
-	buf,err := r.Client.Get(context.Background(),filePath).Bytes()
+	buf,err := r.Client.Get(context.Background(), filePath).Bytes()
 	if err != nil{
 		//TODO: is that correct?
 		return r.newRedisWriter(filePath,nil),nil
-	} else {
+	} else {	
 		return r.newRedisWriter(filePath,buf),nil
 	}
 }
 
 func (r *RedisBackedCache) Delete(filePath string) error {
-	d,err := r.Client.Del(context.Background(),filePath).Result()
+	if r.Client == nil {
+		r.initClientOnLambda()
+	}
+
+	d,err := r.Client.Del(context.Background(), filePath).Result()
 	if err != nil {
 		return err
 	}
@@ -279,7 +325,7 @@ func (r *RedisBackedCache) Delete(filePath string) error {
 }
 
 func (r *RedisBackedCache) Join(elem ...string) string {
-	return strings.Join(elem,"/")
+	return strings.Join(elem,"")
 }
 
 func (r *RedisBackedCache) Split(path string) []string {
@@ -288,23 +334,25 @@ func (r *RedisBackedCache) Split(path string) []string {
 
 
 func (r *RedisBackedCache) Deploy() error {
-	conf,err := r.DeploymentStragey.Deploy()
+	conf,err := r.DeploymentStrategy.Deploy()
 	if err != nil{
 		return err
 	}
-
 	r.Config = conf
-
+	log.Infof("CONFIG: %#v", conf)
 	return nil
 
 }
 
 func (r *RedisBackedCache) Undeploy() error {
 	r.Client.Close()
-	return r.DeploymentStragey.Undeploy()
+	return r.DeploymentStrategy.Undeploy()
 }
 
 func (r *RedisBackedCache) Flush(fs corfs.FileSystem) error {
+	if r.Client == nil {
+		r.initClientOnLambda()
+	}
 	scan := r.Client.Scan(context.Background(),0,"*",0)
 	itter := scan.Iterator()
 
@@ -339,6 +387,10 @@ func (r *RedisBackedCache) Flush(fs corfs.FileSystem) error {
 }
 
 func (r *RedisBackedCache) Clear() error {
+	if r.Client == nil {
+		r.initClientOnLambda()
+	}
+
 	scan := r.Client.Scan(context.Background(),0,"*",0)
 	itter := scan.Iterator()
 	keys := make([]string,0)
@@ -430,9 +482,38 @@ func (r *RedisCacheConfigInjector) ConfigureLambda(function *lambda.CreateFuncti
 	modeFlag := fmt.Sprintf("%d",mode)
 	function.Environment.Variables["REDIS_MODE"] = &modeFlag
 
+	// VPC configurations
+
+	vpcConfig := &lambda.VpcConfig{
+		SecurityGroupIds: aws.StringSlice(r.system.Config.LambdaSecurityGroupIds),
+		SubnetIds: aws.StringSlice(r.system.Config.LambdaSubnetIds),
+	}
+	function.SetVpcConfig(vpcConfig)
+
 	return nil
 }
 
 func (r *RedisCacheConfigInjector) CacheSystem() CacheSystem {
 	return r.system
+}
+
+func (r *RedisBackedCache) initClientOnLambda() error {
+	var addrs string
+	var endpoints []string
+	if addrs = os.Getenv("REDIS_ADDRS"); addrs != "" {
+		if strings.ContainsRune(addrs,';'){
+			endpoints = strings.Split(addrs,";")
+		} else {
+			endpoints = []string{addrs}
+		}	
+	} else {
+		panic("Could not find Redis endpoints in lambda")
+	}
+	r.Client = redis.NewUniversalClient(&redis.UniversalOptions{
+		Addrs: endpoints,
+		RouteRandomly: true,
+	})
+
+	log.Infof("ENV addrs %#v", endpoints)
+	return nil
 }

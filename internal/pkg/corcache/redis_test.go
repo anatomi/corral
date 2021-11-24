@@ -6,7 +6,7 @@ import (
 
 func TestRedisCacheSystem (t *testing.T) {
 	rcs := &RedisBackedCache{
-		DeploymentStragey: &LocalRedisDeploymentStrategy{},
+		DeploymentStrategy: &LocalRedisDeploymentStrategy{},
 	}
 
 	RunTestCacheSystem(t,rcs)

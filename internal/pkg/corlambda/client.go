@@ -261,6 +261,9 @@ func (l *LambdaClient) createFunction(function *FunctionConfig) error {
 	
 
 	createdFunction, err := l.Client.CreateFunction(createArgs)
+	if err != nil {
+		return err
+	}
 	log.Infof("Lambda state: %s", *createdFunction.State)
 	for *createdFunction.State != "Active" {
 		getConfigInput := &lambda.GetFunctionConfigurationInput{

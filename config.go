@@ -42,20 +42,28 @@ func setupDefaults() {
 		"remoteLoggingHost":  "",
 		"logName":            "activations",
 
-		"cache": 4, //coresponse to corcache.CacheSystemType (4 for EFS cache)
+		"cache": 2, //coresponse to corcache.CacheSystemType (2 for Redis)
 
 		"cacheSize": uint64(10 * 1024 * 1024), //corosponse to corcache.Local
 
-		"redisDeploymentType":    0,  //corosponse to corcache.Redisx
-		"kubernetesNamespace":    "", //
-		"kubernetesStorageClass": "",
-		"redisPort":              nil,
+		"redisDeploymentType":    	2,  //corosponse to corcache.Redisx
+		"redisPort":              	nil,
+		"redisClusterSize":			3,
+		"kubernetesNamespace":    	"", //
+		"kubernetesStorageClass": 	"",
+		"elasticacheNodeType":    	"cache.t2.micro",
+		"elasticacheEngineVersion": "6.x",
+		
 
+		// EFS config
 		"efsFilesystemName": "corral_efs_filesystem",
-		"efsVPCSubnetIds": "", // List of subnet ids associated with VPC separated by ';'"
-		"efsVPCSecurityGroupIds": "", // Security group id asociated with VPC, i.e.: "sg-085912345678*****"
 		"efsAccessPointName": "corral_efs_accesspoint",
 		"efsAccessPointPath": "/cache",
+
+		// AWS VPC config
+		"efsVPCSubnetIds": "", // List of subnet ids associated with VPC separated by ';'"
+		"efsVPCSecurityGroupIds": "", // Security group id asociated with VPC, i.e.: "sg-085912345678*****"
+	
 
 	}
 	for key, value := range defaultSettings {
