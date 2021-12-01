@@ -407,11 +407,10 @@ func (d *Driver) run() {
 		fmt.Printf("Map Execution Time: %s\n", endMap.Sub(startMap))
 
 		startReduce := time.Now()
-		d.runMapPhase(job, idx, inputs)
+		d.runReducePhase(job, idx)
 		endReduce := time.Now()
 		fmt.Printf("Reduce Execution Time: %s\n", endReduce.Sub(startReduce))
 
-		d.runReducePhase(job, idx)
 
 		// Set inputs of next job to be outputs of current job
 		inputs = []string{job.fileSystem.Join(jobWorkingLoc, "output-*")}
