@@ -18,6 +18,7 @@ const (
 	Redis
 	Olric
 	EFS
+	Dynamodb
 )
 
 type CacheConfigIncector interface {
@@ -62,6 +63,12 @@ func NewCacheSystem(fsType CacheSystemType) (CacheSystem,error) {
 				log.Debugf("failed to init EFS cache, %+v",err)
 				return nil,err
 			}
+		case Dynamodb:
+			cs, err = NewDynamoCache()
+			if err != nil {
+				log.Debugf("failed to init DynamoDB cache, %+v",err)
+				return nil,err
+			}
 		default:
 			return nil, fmt.Errorf("unknown cache type or not yet implemented %d",fsType)
 	}
@@ -85,6 +92,9 @@ func CacheSystemTypes(fs corfs.FileSystem) CacheSystemType {
 
 	if _,ok := fs.(*RedisBackedCache);ok {
 		return Redis
+	}
+	if _,ok := fs.(*DynamoCache);ok {
+		return Dynamodb
 	}
 	return NoCache
 }

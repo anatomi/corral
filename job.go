@@ -72,7 +72,7 @@ func (j *Job) runMapper(mapperID uint, splits []inputSplit) error {
 		if corcache.CacheSystemTypes(fs) == corcache.EFS {
 			outputPath = viper.GetString("lambdaEfsPath")
 		}
-		if corcache.CacheSystemTypes(fs) == corcache.Redis {
+		if corcache.CacheSystemTypes(fs) == corcache.Redis || corcache.CacheSystemTypes(fs) == corcache.Dynamodb {
 			outputPath = ""
 		}
 	}
@@ -162,7 +162,7 @@ func (j *Job) runReducer(binID uint) error {
 			outputPath = viper.GetString("lambdaEfsPath")
 		}
 
-		if corcache.CacheSystemTypes(fs) == corcache.Redis {
+		if corcache.CacheSystemTypes(fs) == corcache.Redis || corcache.CacheSystemTypes(fs) == corcache.Dynamodb {
 			outputPath = ""
 		}
 	}
