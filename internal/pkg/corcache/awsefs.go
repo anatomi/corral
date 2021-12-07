@@ -60,6 +60,15 @@ func NewEFSCache() (*AWSEFSCache,error) {
 	},nil
 }
 
+// initalize EFS client
+func (A *AWSEFSCache) Deploy() error {
+	if A.Client != nil{
+		log.Debug("EFS client was already initialized")
+		return nil
+	}
+
+	return A.NewEfsClient()
+}
 
 // initialize EFS cache configuration; create new Filesyste, MountTargets and Accesspoint for Lambda
 func (A *AWSEFSCache) Init() error {
@@ -129,17 +138,10 @@ func (A *AWSEFSCache) Init() error {
 	return nil
 }
 
-func (A *AWSEFSCache) Deploy() error {
-	if A.Client != nil{
-		log.Debug("EFS client was already initialized")
-		return nil
-	}
-
-	return A.NewEfsClient()
-}
-
 func (A *AWSEFSCache) Undeploy() error {
-	//EFS efsiface does not have any methods to close EFS clients or delete filesystem, mount targets or access points
+	// EFS efsiface does not have any methods to close EFS clients or delete filesystem, mount targets or access points
+	// You can't delete a file system that is in use. That is, if the file system has any mount targets, 
+	// you must first delete them. For more information, see DescribeMountTargets and DeleteMountTarget.
 	return nil
 }
 
@@ -213,7 +215,6 @@ func (A *AWSEFSCache) Split(path string) []string {
 }
 
 func (A *AWSEFSCache) Flush(fs corfs.FileSystem) error {
-	// read all files from Cache
 	files, err := A.ListFiles(A.Config.AccessPointPath)
 	if err != nil {
 		return err
@@ -334,20 +335,31 @@ func (A *AWSEFSCache) InitEfsFilesystem(config *AWSEfsConfig) error {
 		}
 		A.FileSystem = createResult
 
-		// wait until file system is avaiable
-		for *A.FileSystem.LifeCycleState != "available" {
+		filesystemAvailable := false
+		log.Infof("Waiting for file system to be avaialble")        
+		interval := setInterval(func() {
 			describeInput := &efs.DescribeFileSystemsInput{
 				FileSystemId: A.FileSystem.FileSystemId,
 			}
 			result, err := A.Client.DescribeFileSystems(describeInput)
 			if err != nil {
-				return err
+				panic(err)
 			}
 			
-			A.FileSystem = result.FileSystems[0]
+			A.FileSystem = result.FileSystems[0];
+			if *A.FileSystem.LifeCycleState == "available" {
+				filesystemAvailable = true;
+			}
+		}, 2000, false)
+			
+		for {
+			if filesystemAvailable {
+				log.Infof("EFS Filesystem is avaiable")
+				interval <- true
+				return nil
+			}
 		}
 	}
-	log.Infof("EFS Filesystem is avaiable")
 	return nil
 }
 
@@ -375,7 +387,38 @@ func (A *AWSEFSCache) InitMountTargets(config *AWSEfsConfig) error {
 			return err
 		}
 		A.MountTargets = append(A.MountTargets, mountResult)
-		log.Infof("EFS Mount targets created")
+	}
+	log.Infof("EFS Mount targets created")
+
+	mountTargetsAvailable := false
+	log.Infof("Waiting for mount targets to be avaialble")        
+	interval := setInterval(func() {
+		describeInput := &efs.DescribeMountTargetsInput{
+			FileSystemId: A.FileSystem.FileSystemId,
+		}
+		result, err := A.Client.DescribeMountTargets(describeInput)
+		if err != nil {
+			panic(err)
+		}
+		countAvailableMountTargets := 0
+		for _, mountTarget := range result.MountTargets {
+			if *mountTarget.LifeCycleState == "available" {
+				countAvailableMountTargets = countAvailableMountTargets + 1
+			}
+		}
+
+		if countAvailableMountTargets == len(result.MountTargets) {
+			mountTargetsAvailable = true
+			A.MountTargets = result.MountTargets
+		}
+	}, 10000, false)
+        
+	for {
+		if mountTargetsAvailable {
+			log.Infof("Mount targets are avaialble")
+			interval <- true
+			return nil
+		}
 	}
 	return nil	
 }
