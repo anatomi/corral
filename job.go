@@ -244,6 +244,16 @@ func (j *Job) runReducer(binID uint) error {
 		}(key, values)
 	}
 
+	if !j.config.Cleanup {
+		if j.cacheSystem != nil {
+			err := j.cacheSystem.Flush(j.fileSystem, j.outputPath)
+
+			if err != nil {
+				log.Errorf("failed to flush cache to fs, %+v", err)
+			}
+		}
+	}
+
 	waitGroup.Wait()
 
 	atomic.AddInt64(&j.bytesWritten, emitter.bytesWritten())

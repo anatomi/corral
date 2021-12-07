@@ -313,7 +313,7 @@ func (D *DynamoCache) Split(path string) []string {
 	return strings.Split(path,"")
 }
 
-func (D *DynamoCache) Flush(fs corfs.FileSystem) error {
+func (D *DynamoCache) Flush(fs corfs.FileSystem, outputPath string) error {
 	return nil
 }
 

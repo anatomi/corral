@@ -9,7 +9,7 @@ func TestElasticacheConfig(t *testing.T){
 	NumNodes := int64(2)
 	ecrds := ElasticacheRedisDeploymentStrategy{
 		NodeType:      	"cache.t2.micro",//viper.GetString("elasticacheNodeType"),
-		NumCacheNodes: 	&NumNodes,
+		NumCacheNodes: 	*NumNodes,
 		EngineVersion:  "6.x",//viper.GetString("elasticacheEngineVersion"),
 	}
 

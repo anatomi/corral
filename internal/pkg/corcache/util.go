@@ -272,7 +272,7 @@ func test_Flush(t *testing.T,local CacheSystem) {
 
 	files := writeTo(local,prefix,t,".bin")
 
-	err = local.Flush(base)
+	err = local.Flush(base, "")
 	if err != nil {
 		t.Fatalf("failed to flush files")
 	}

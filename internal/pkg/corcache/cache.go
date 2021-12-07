@@ -32,7 +32,7 @@ type CacheSystem interface {
 	Deploy() error
 	Undeploy() error
 
-	Flush(system corfs.FileSystem) error
+	Flush(system corfs.FileSystem, outputPath string) error
 	Clear() error
 
 	//FunctionInjector can be used by function deployment code to modify function deploymentes to use the underling cache system, warning needs to be implmented for each platfrom induvidually

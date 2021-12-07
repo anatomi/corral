@@ -191,6 +191,20 @@ func (r *RedisBackedCache) Init() error {
 	return nil
 }
 
+func (r *RedisBackedCache) Deploy() error {
+	conf,err := r.DeploymentStrategy.Deploy()
+	if err != nil{
+		return err
+	}
+	r.Config = conf
+	return nil
+
+}
+
+func (r *RedisBackedCache) Undeploy() error {
+	r.Client.Close()
+	return r.DeploymentStrategy.Undeploy()
+}
 
 func (r *RedisBackedCache) ListFiles(pathGlob string) ([]corfs.FileInfo, error) {
 	if r.Client == nil {
@@ -332,24 +346,7 @@ func (r *RedisBackedCache) Split(path string) []string {
 	return strings.Split(path,"/")
 }
 
-
-func (r *RedisBackedCache) Deploy() error {
-	conf,err := r.DeploymentStrategy.Deploy()
-	if err != nil{
-		return err
-	}
-	r.Config = conf
-	log.Infof("CONFIG: %#v", conf)
-	return nil
-
-}
-
-func (r *RedisBackedCache) Undeploy() error {
-	r.Client.Close()
-	return r.DeploymentStrategy.Undeploy()
-}
-
-func (r *RedisBackedCache) Flush(fs corfs.FileSystem) error {
+func (r *RedisBackedCache) Flush(fs corfs.FileSystem, outputPath string) error {
 	if r.Client == nil {
 		r.initClientOnLambda()
 	}
@@ -363,8 +360,7 @@ func (r *RedisBackedCache) Flush(fs corfs.FileSystem) error {
 		}
 
 		path := itter.Val()
-		destPath := fs.Join(r.Split(path)...)
-		writer,err := fs.OpenWriter(destPath)
+		writer,err := fs.OpenWriter(r.Join(outputPath, path))
 		if err != nil {
 			return err
 		}
@@ -415,8 +411,6 @@ type RedisCacheConfigInjector struct {
 	system *RedisBackedCache
 
 }
-
-
 
 //WE strongly assume astion.Paramters are injected at runtime...
 func (r *RedisCacheConfigInjector) ConfigureWhisk(action *whisk.Action) error {

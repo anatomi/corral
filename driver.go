@@ -419,8 +419,9 @@ func (d *Driver) run() {
 		log.Infof("Job %d - Total Bytes Read:\t%s", idx, humanize.Bytes(uint64(job.bytesRead)))
 		log.Infof("Job %d - Total Bytes Written:\t%s", idx, humanize.Bytes(uint64(job.bytesWritten)))
 
+		// Flush() moved to job.go since it needs to be done on Lambda
 		//check if we need to flush the intermedate data to disk
-		if viper.GetBool("durable") && !viper.GetBool("cleanup") {
+		/*if viper.GetBool("durable") && !viper.GetBool("cleanup") {
 			if d.cache != nil {
 				//we dont need to wait for this to finish, this might also take a while ...
 				go func(cache corcache.CacheSystem, fs corfs.FileSystem) {
@@ -431,7 +432,7 @@ func (d *Driver) run() {
 					}
 				}(d.cache, job.fileSystem)
 			}
-		}
+		}*/
 
 		//clear cache
 		if viper.GetBool("cleanup") && d.cache != nil {

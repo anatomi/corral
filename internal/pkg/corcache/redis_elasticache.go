@@ -119,9 +119,6 @@ func (ec *ElasticacheRedisDeploymentStrategy) Deploy() (*ClientConfig, error) {
 		return nil,fmt.Errorf("failed to create replication group cluster, %+v",err)
 	}
 
-	log.Infof("Primary: %+v", replicationGroup.NodeGroups[0].PrimaryEndpoint)
-	log.Infof("Reader: %+v", replicationGroup.NodeGroups[0].ReaderEndpoint)
-
 	redis_conf := ClientConfig{
 		Addrs:          nil,
 		LambdaSubnetIds: nil,
@@ -250,6 +247,7 @@ func (ec *ElasticacheRedisDeploymentStrategy) createReplicationGroup(config *ela
 			} else {
 				log.Infof("No update needed")
 				result.ReplicationGroup = existingReplicationGroup.ReplicationGroups[0]
+				return result.ReplicationGroup, nil
 			}
 		} else {
 			return nil,err

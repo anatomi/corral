@@ -174,7 +174,7 @@ func (l *LocalCache) Undeploy() error {
 	return nil
 }
 
-func (l *LocalCache) Flush(fs corfs.FileSystem) error {
+func (l *LocalCache) Flush(fs corfs.FileSystem, outputPath string) error {
 	errors := make([]error, 0)
 
 	scan := func(key, val interface{}) bool {

@@ -214,7 +214,7 @@ func (A *AWSEFSCache) Split(path string) []string {
 	return strings.Split(path,"/")
 }
 
-func (A *AWSEFSCache) Flush(fs corfs.FileSystem) error {
+func (A *AWSEFSCache) Flush(fs corfs.FileSystem, outputPath string) error {
 	conf := AWSEfsConfig{}
 	if path := os.Getenv("MOUNT_PATH"); path != "" {
 		conf.LambdaEfsPath = path
@@ -226,11 +226,11 @@ func (A *AWSEFSCache) Flush(fs corfs.FileSystem) error {
 	if err != nil {
 		return err
 	}
-
 	bytesMoved := int64(0)
 	for _,file := range files {
 		path := file.Name
-		destPath := fs.Join(A.Split(path)...)
+		pathComponents := A.Split(file.Name)
+		destPath := fs.Join(outputPath, pathComponents[len(pathComponents)-1])
 		writer,err := fs.OpenWriter(destPath)
 		if err != nil {
 			return err
