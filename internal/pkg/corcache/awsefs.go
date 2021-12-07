@@ -215,7 +215,14 @@ func (A *AWSEFSCache) Split(path string) []string {
 }
 
 func (A *AWSEFSCache) Flush(fs corfs.FileSystem) error {
-	files, err := A.ListFiles(A.Config.AccessPointPath)
+	conf := AWSEfsConfig{}
+	if path := os.Getenv("MOUNT_PATH"); path != "" {
+		conf.LambdaEfsPath = path
+	} else {
+		panic("Could not find MOUNT_PATH for EFS in lambda")
+	}
+	A.Config = &conf
+	files, err := A.ListFiles(A.Config.LambdaEfsPath)
 	if err != nil {
 		return err
 	}
@@ -274,23 +281,22 @@ func (a *AWSEFSCacheConfigInjector) CacheSystem() CacheSystem {
 	return a.system
 }
 
-
 // add VPC configuration for Lambda
 func (a *AWSEFSCacheConfigInjector) ConfigureLambda(functionConfig *lambda.CreateFunctionInput) error {	
+	functionConfig.Environment.Variables["ACCESS_POINT_PATH"] = &a.system.Config.AccessPointPath
+	functionConfig.Environment.Variables["MOUNT_PATH"] = &a.system.Config.LambdaEfsPath
+	
 	filesystemConfig := &lambda.FileSystemConfig{
 		Arn: a.system.AccessPoint.AccessPointArn,
 		LocalMountPath: aws.String(viper.GetString("lambdaEfsPath")),
 	}
 	functionConfig.SetFileSystemConfigs([]*lambda.FileSystemConfig{filesystemConfig})
-	log.Infof("EFS config for Lambda: %#v", filesystemConfig)
 
 	vpcConfig := &lambda.VpcConfig{
 		SecurityGroupIds: aws.StringSlice(a.system.Config.VpcSecurityGroupIds),
 		SubnetIds: aws.StringSlice(a.system.Config.VpcSubnetIds),
 	}
-	functionConfig.SetVpcConfig(vpcConfig)
-	log.Infof("Loaded vpc sys config: %#v", vpcConfig)
-	
+	functionConfig.SetVpcConfig(vpcConfig)	
 	return nil
 }
 
