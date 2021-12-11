@@ -61,59 +61,83 @@ func NewEFSCache() (*AWSEFSCache,error) {
 }
 
 // initalize EFS client
-func (A *AWSEFSCache) Deploy() error {
+func (A *AWSEFSCache) Init() error {
 	if A.Client != nil{
 		log.Debug("EFS client was already initialized")
 		return nil
+	}
+
+	if A.Config == nil {
+		conf := AWSEfsConfig{}
+
+		fail := func(key string) error {
+			return fmt.Errorf("missing client config and %s not set in enviroment",key)
+		}
+
+		filesystemName := os.Getenv("FILESYSTEM_NAME")
+		if filesystemName != "" {
+			conf.FilesystemName = filesystemName
+		} else {
+			return fail("FILESYSTEM_NAME")
+		}
+
+		accessPointName := os.Getenv("ACCESS_POINT_NAME")
+		if accessPointName != "" {
+			conf.AccessPointName = accessPointName
+		} else {
+			return fail("ACCESS_POINT_NAME")
+		}
+
+		accessPointPath := os.Getenv("ACCESS_POINT_PATH")
+		if accessPointPath != "" {
+			conf.AccessPointPath = accessPointPath
+		} else {
+			return fail("ACCESS_POINT_PATH")
+		}
+
+		filesystemPath := os.Getenv("FILESYSTEM_PATH")
+		if filesystemPath != "" {
+			conf.LambdaEfsPath = filesystemPath
+		} else {
+			return fail("FILESYSTEM_PATH")
+		}
+
+		A.Config = &conf
 	}
 
 	return A.NewEfsClient()
 }
 
 // initialize EFS cache configuration; create new Filesyste, MountTargets and Accesspoint for Lambda
-func (A *AWSEFSCache) Init() error {
+func (A *AWSEFSCache) Deploy() error {
 	log.Infof("Init EFS Cache")
 
 	conf := AWSEfsConfig{}
 
 	fail := func(key string) error {
-		return fmt.Errorf("missing client conif and %s not set in enviroment",key)
+		return fmt.Errorf("missing client config and %s not set in config.go",key)
 	}
 
 	var subnetIds string
-	if subnetIds = os.Getenv("VPC_SUBNET_IDS"); subnetIds != "" {
-		if strings.ContainsRune(subnetIds,';'){
-			conf.VpcSubnetIds = strings.Split(subnetIds,";")
-		} else {
-			conf.VpcSubnetIds = []string{subnetIds}
-		}	
-	} else if subnetIds = viper.GetString("efsVPCSubnetIds"); subnetIds != "" {
+	if subnetIds = viper.GetString("efsVPCSubnetIds"); subnetIds != "" {
 		if strings.ContainsRune(subnetIds,';'){
 			conf.VpcSubnetIds = strings.Split(subnetIds,";")
 		} else {
 			conf.VpcSubnetIds = []string{subnetIds}
 		}
 	} else if subnetIds == "" {
-		log.Error("could not determine vpc subnet ids")
-		return fail("VPC_SUBNET_IDS")
+		return fail("efsVPCSubnetIds")
 	}
 
 	var securityGroupIds string
-	if securityGroupIds = os.Getenv("VPC_SECURITYGROUP_IDS"); securityGroupIds != "" {
-		if strings.ContainsRune(securityGroupIds,';'){
-			conf.VpcSecurityGroupIds = strings.Split(securityGroupIds,";")
-		} else {
-			conf.VpcSecurityGroupIds = []string{securityGroupIds}
-		}	
-	} else if securityGroupIds = viper.GetString("efsVPCSecurityGroupIds"); securityGroupIds != "" {
+	if securityGroupIds = viper.GetString("efsVPCSecurityGroupIds"); securityGroupIds != "" {
 		if strings.ContainsRune(securityGroupIds,';'){
 			conf.VpcSecurityGroupIds = strings.Split(securityGroupIds,";")
 		} else {
 			conf.VpcSecurityGroupIds = []string{securityGroupIds}
 		}
 	} else if securityGroupIds == "" {
-		log.Error("could not determine vpc securitygroup ids")
-		return fail("VPC_SECURITYGROUP_IDS")
+		return fail("efsVPCSecurityGroupIds")
 	}
 
 	conf.FilesystemName = viper.GetString("efsFilesystemName")
@@ -122,6 +146,8 @@ func (A *AWSEFSCache) Init() error {
 	conf.LambdaEfsPath = viper.GetString("lambdaEfsPath")
 
 	A.Config = &conf
+
+	A.NewEfsClient()
 
 	err := A.InitEfsFilesystem(A.Config)
 	if err != nil {
@@ -215,13 +241,6 @@ func (A *AWSEFSCache) Split(path string) []string {
 }
 
 func (A *AWSEFSCache) Flush(fs corfs.FileSystem, outputPath string) error {
-	conf := AWSEfsConfig{}
-	if path := os.Getenv("MOUNT_PATH"); path != "" {
-		conf.LambdaEfsPath = path
-	} else {
-		panic("Could not find MOUNT_PATH for EFS in lambda")
-	}
-	A.Config = &conf
 	files, err := A.ListFiles(A.Config.LambdaEfsPath)
 	if err != nil {
 		return err
@@ -283,12 +302,14 @@ func (a *AWSEFSCacheConfigInjector) CacheSystem() CacheSystem {
 
 // add VPC configuration for Lambda
 func (a *AWSEFSCacheConfigInjector) ConfigureLambda(functionConfig *lambda.CreateFunctionInput) error {	
+	functionConfig.Environment.Variables["FILESYSTEM_NAME"] = &a.system.Config.FilesystemName
+	functionConfig.Environment.Variables["ACCESS_POINT_NAME"] = &a.system.Config.AccessPointName
 	functionConfig.Environment.Variables["ACCESS_POINT_PATH"] = &a.system.Config.AccessPointPath
-	functionConfig.Environment.Variables["MOUNT_PATH"] = &a.system.Config.LambdaEfsPath
-	
+	functionConfig.Environment.Variables["FILESYSTEM_PATH"] = &a.system.Config.LambdaEfsPath
+
 	filesystemConfig := &lambda.FileSystemConfig{
 		Arn: a.system.AccessPoint.AccessPointArn,
-		LocalMountPath: aws.String(viper.GetString("lambdaEfsPath")),
+		LocalMountPath: aws.String(a.system.Config.LambdaEfsPath),
 	}
 	functionConfig.SetFileSystemConfigs([]*lambda.FileSystemConfig{filesystemConfig})
 

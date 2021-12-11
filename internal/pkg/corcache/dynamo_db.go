@@ -15,6 +15,8 @@ import (
 	"strings"
 	"fmt"
 	"bytes"
+	"github.com/spf13/viper"
+
 )
 
 const TablePartitionKey = "CorralPartitionKey"
@@ -43,20 +45,66 @@ func NewDynamoCache() (*DynamoCache,error) {
 
 
 func (D *DynamoCache) Init() error {
-	// Create new table
+	if D.Client != nil{
+		log.Debug("Dynamodb client was already initialized")
+		return nil
+	}
+
+	if D.Config == nil {
+		conf := DynamoConfig{}
+
+		
+		fail := func(key string) error {
+			return fmt.Errorf("missing client conif and %s not set in enviroment",key)
+		}
+
+		tableName := os.Getenv("DYNAMO_TABLE_NAME")
+		if tableName != "" {
+			conf.TableName = tableName
+		} else {
+			return fail("DYNAMO_TABLE_NAME")
+		}
+
+		partitionKey := os.Getenv("DYNAMO_PARTITION_KEY")
+		if partitionKey != "" {
+			conf.TablePartitionKey = partitionKey
+		} else {
+			return fail("DYNAMO_PARTITION_KEY")
+		}
+
+		sortKey := os.Getenv("DYNAMO_SORT_KEY")
+		if sortKey != "" {
+			conf.TableSortKey = sortKey
+		} else {
+			return fail("DYNAMO_SORT_KEY")
+		}
+
+		valueAttr := os.Getenv("DYNAMO_VALUE_ATTR")
+		if valueAttr != "" {
+			conf.ValueAttribute = valueAttr
+		} else {
+			return fail("DYNAMO_VALUE_ATTR")
+		}
+
+		D.Config = &conf
+	}
+
+	return D.NewDynamoClient()
+}
+
+func (D *DynamoCache) Deploy() error {
 	conf := DynamoConfig{}
 
-	//conf.TableName = viper.GetString("dynamodbTableName")
-	conf.TableName = "TestTable"
+	conf.TableName = viper.GetString("dynamodbTableName")
 	conf.TablePartitionKey = TablePartitionKey
 	conf.TableSortKey = TableSortKey
 	conf.ValueAttribute = ValueAttribute
-	/*conf.ReadCapacityUnits = viper.GetInt64("dynamodbRCP")
-	conf.WriteCapacityUnits = viper.GetInt64("dynamodbWCP")*/
-	conf.ReadCapacityUnits = int64(10)
-	conf.WriteCapacityUnits = int64(10)
+	conf.ReadCapacityUnits = viper.GetInt64("dynamodbRCP")
+	conf.WriteCapacityUnits = viper.GetInt64("dynamodbWCP")
 
 	D.Config = &conf
+
+	D.NewDynamoClient()
 
 	err := D.InitDynamoTable(D.Config)
 	if err != nil {
@@ -66,19 +114,7 @@ func (D *DynamoCache) Init() error {
 	return nil
 }
 
-func (D *DynamoCache) Deploy() error {
-	if D.Client != nil{
-		log.Debug("Dynamodb client was already initialized")
-		return nil
-	}
-
-	return D.NewDynamoClient()
-}
-
 func (D *DynamoCache) Undeploy() error {
-	if D.Client == nil {
-		D.initClientOnLambda()
-	}
 	input := &dynamodb.DeleteTableInput{
 		TableName: aws.String(D.Config.TableName),
 	}
@@ -88,10 +124,6 @@ func (D *DynamoCache) Undeploy() error {
 }
 
 func (D *DynamoCache) ListFiles(pathGlob string) ([]corfs.FileInfo, error) {
-	if D.Client == nil {
-		D.initClientOnLambda()
-	}
-
 	pathGlob = strings.TrimSuffix(pathGlob, "*")
 	filt := expression.Name(D.Config.TablePartitionKey).BeginsWith(pathGlob)
 	proj := expression.NamesList(
@@ -134,10 +166,6 @@ func (D *DynamoCache) ListFiles(pathGlob string) ([]corfs.FileInfo, error) {
 }
 
 func (D *DynamoCache) Stat(path string) (corfs.FileInfo, error) {
-	if D.Client == nil {
-		D.initClientOnLambda()
-	}
-
 	input := &dynamodb.GetItemInput{
 		Key: map[string]*dynamodb.AttributeValue{
 			D.Config.TablePartitionKey: {
@@ -172,10 +200,6 @@ func (b *bufferedDynamodbReader) Close() error {
 }
 
 func (D *DynamoCache) OpenReader(filePath string, startAt int64) (io.ReadCloser, error) {
-	if D.Client == nil {
-		D.initClientOnLambda()
-	}
-	
 	input := &dynamodb.GetItemInput{
 		Key: map[string]*dynamodb.AttributeValue{
 			D.Config.TablePartitionKey: {
@@ -248,11 +272,6 @@ func (D *DynamoCache) newDynamodbWriter(key string,buffer []byte) *bufferedDynam
 }
 
 func (D *DynamoCache) OpenWriter(filePath string) (io.WriteCloser, error) {
-	if D.Client == nil {
-		D.initClientOnLambda()
-	}
-
-	log.Infof("Config: %#v", D.Config)
 	input := &dynamodb.GetItemInput{
 		Key: map[string]*dynamodb.AttributeValue{
 			D.Config.TablePartitionKey: {
@@ -282,10 +301,6 @@ func (D *DynamoCache) OpenWriter(filePath string) (io.WriteCloser, error) {
 }
 
 func (D *DynamoCache) Delete(path string) error {
-	if D.Client == nil {
-		D.initClientOnLambda()
-	}
-
 	input := &dynamodb.DeleteItemInput{
 		Key: map[string]*dynamodb.AttributeValue{
 			TablePartitionKey: {
@@ -318,10 +333,6 @@ func (D *DynamoCache) Flush(fs corfs.FileSystem, outputPath string) error {
 }
 
 func (D *DynamoCache) Clear() error {
-	if D.Client == nil {
-		D.initClientOnLambda()
-	}
-
 	/*proj := expression.NamesList(
 		expression.Name(D.Config.TablePartitionKey),
 		expression.Name(D.Config.TableSortKey),
@@ -390,7 +401,6 @@ func (d *DynamoCacheConfigInjector) ConfigureLambda(functionConfig *lambda.Creat
 	functionConfig.Environment.Variables["DYNAMO_SORT_KEY"] = &d.system.Config.TableSortKey
 	functionConfig.Environment.Variables["DYNAMO_VALUE_ATTR"] = &d.system.Config.ValueAttribute
 	
-	log.Infof("ADD env variables")
 	return nil
 }
 
@@ -463,34 +473,5 @@ func (D *DynamoCache) InitDynamoTable(config *DynamoConfig) error {
 	}
 	
 	log.Infof("Table is avaiable")
-	return nil
-}
-
-func (D *DynamoCache) initClientOnLambda() error {
-	conf := DynamoConfig{}
-
-	if tableName := os.Getenv("DYNAMO_TABLE_NAME"); tableName != "" {
-		conf.TableName = tableName
-	} else {
-		panic("Could not find TableName in lambda")
-	}
-	if tablePK := os.Getenv("DYNAMO_PARTITION_KEY"); tablePK != "" {
-		conf.TablePartitionKey = tablePK
-	} else {
-		panic("Could not find TablePartitionKey in lambda")
-	}
-	if tableSK := os.Getenv("DYNAMO_SORT_KEY"); tableSK != "" {
-		conf.TableSortKey = tableSK
-	} else {
-		panic("Could not find TableSortKey in lambda")
-	}
-	if tableVA := os.Getenv("DYNAMO_VALUE_ATTR"); tableVA != "" {
-		conf.ValueAttribute = tableVA
-	} else {
-		panic("Could not find TableValueAttr in lambda")
-	}
-
-	D.Config = &conf
-	D.NewDynamoClient()
 	return nil
 }

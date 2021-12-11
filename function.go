@@ -40,7 +40,15 @@ func handle(driver *Driver, hostID func() string, requestID func() string) func(
 			result.EEnd = time.Now().UnixNano()
 			return result, err
 		}
-
+		if cache != nil {
+			err = cache.Init()
+			if err != nil{
+				log.Errorf("failed to init filesystem, %+v",err)
+				result.EEnd = time.Now().UnixNano()
+				return result, err		
+			}
+		}
+		
 		driver.currentJob = task.JobNumber
 		currentJob.fileSystem = fs
 		currentJob.cacheSystem = cache

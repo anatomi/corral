@@ -340,6 +340,7 @@ func (d *Driver) run() {
 		err := d.cache.Deploy()
 		if err != nil {
 			log.Errorf("failed to deploy cache, %+v", err)
+			panic(err)
 		}
 
 		err = d.cache.Init()

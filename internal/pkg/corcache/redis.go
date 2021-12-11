@@ -150,16 +150,20 @@ func (r *RedisBackedCache) Init() error {
 		}
 
 		user := os.Getenv("REDIS_USER")
-		if user != "" {
-			conf.User = user
+		if isEnvExist("REDIS_USER") {
+			if user != "" {
+				conf.User = user
+			}
 		} else {
 			return fail("REDIS_USER")
 		}
 
 		//TODO: XXXX this is not a good practice, we could compile this in code and fail in local settings, but for now it is what it is...
 		secret := os.Getenv("REDIS_SECRET")
-		if user != "" {
-			conf.password = secret
+		if isEnvExist("REDIS_SECRET") {
+			if user != "" {
+				conf.password = secret
+			}
 		} else {
 			return fail("REDIS_SECRET")
 		}
@@ -207,10 +211,6 @@ func (r *RedisBackedCache) Undeploy() error {
 }
 
 func (r *RedisBackedCache) ListFiles(pathGlob string) ([]corfs.FileInfo, error) {
-	if r.Client == nil {
-		r.initClientOnLambda()
-	}
-
 	results := make([]corfs.FileInfo,0)
 	scan := r.Client.Scan(context.Background(), 0, pathGlob, 0)
 	itter := scan.Iterator()
@@ -231,10 +231,6 @@ func (r *RedisBackedCache) ListFiles(pathGlob string) ([]corfs.FileInfo, error) 
 }
 
 func (r *RedisBackedCache) Stat(filePath string) (corfs.FileInfo, error) {
-	if r.Client == nil {
-		r.initClientOnLambda()
-	}
-
 	size,err := r.Client.StrLen(context.Background(), filePath).Result()
 	if err != nil{
 		return corfs.FileInfo{}, err
@@ -261,10 +257,6 @@ func (b *bufferedRedisReader) Close() error {
 }
 
 func (r *RedisBackedCache) OpenReader(filePath string, startAt int64) (io.ReadCloser, error) {
-	if r.Client == nil {
-		r.initClientOnLambda()
-	}
-
 	buf,err := r.Client.Get(context.Background(), filePath).Bytes()
 	if err != nil {
 		return nil,err
@@ -297,11 +289,6 @@ func (r *RedisBackedCache) newRedisWriter(key string,buffer []byte) *bufferedRed
 	if buffer == nil{
 		buffer = []byte{}
 	}
-
-	if r.Client == nil {
-		r.initClientOnLambda()
-		
-	}
 	return &bufferedRedisWriter{
 		Buffer: bytes.NewBuffer(buffer),
 		key:    key,
@@ -310,10 +297,6 @@ func (r *RedisBackedCache) newRedisWriter(key string,buffer []byte) *bufferedRed
 }
 
 func (r *RedisBackedCache) OpenWriter(filePath string) (io.WriteCloser, error) {
-	if r.Client == nil {
-		r.initClientOnLambda()
-	}
-
 	buf,err := r.Client.Get(context.Background(), filePath).Bytes()
 	if err != nil{
 		//TODO: is that correct?
@@ -324,10 +307,6 @@ func (r *RedisBackedCache) OpenWriter(filePath string) (io.WriteCloser, error) {
 }
 
 func (r *RedisBackedCache) Delete(filePath string) error {
-	if r.Client == nil {
-		r.initClientOnLambda()
-	}
-
 	d,err := r.Client.Del(context.Background(), filePath).Result()
 	if err != nil {
 		return err
@@ -347,9 +326,6 @@ func (r *RedisBackedCache) Split(path string) []string {
 }
 
 func (r *RedisBackedCache) Flush(fs corfs.FileSystem, outputPath string) error {
-	if r.Client == nil {
-		r.initClientOnLambda()
-	}
 	scan := r.Client.Scan(context.Background(),0,"*",0)
 	itter := scan.Iterator()
 
@@ -383,10 +359,6 @@ func (r *RedisBackedCache) Flush(fs corfs.FileSystem, outputPath string) error {
 }
 
 func (r *RedisBackedCache) Clear() error {
-	if r.Client == nil {
-		r.initClientOnLambda()
-	}
-
 	scan := r.Client.Scan(context.Background(),0,"*",0)
 	itter := scan.Iterator()
 	keys := make([]string,0)
@@ -510,4 +482,11 @@ func (r *RedisBackedCache) initClientOnLambda() error {
 
 	log.Infof("ENV addrs %#v", endpoints)
 	return nil
+}
+
+func isEnvExist(key string) bool {
+	if _, ok := os.LookupEnv(key); ok {
+			return true
+	}
+	return false
 }

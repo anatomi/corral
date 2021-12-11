@@ -341,7 +341,7 @@ func (j *Job) writeActivationLog() {
 		//write header
 		err = logWriter.Write([]string{
 			"JId", "CId", "HId", "RId", "CStart", "EStart", "EEnd", "Read", "Written",
-			"CMEM", "CMBS", "CRBS", "CSP", "CMC", "CTO",
+			"CMEM", "CMBS", "CRBS", "CSP", "CMC", "CTO", "CCS",
 		})
 		if err != nil {
 			log.Errorf("failed to open activation log @ %s - %f", logName, err)
@@ -367,6 +367,7 @@ func (j *Job) writeActivationLog() {
 			strconv.FormatInt(viper.GetInt64("splitSize"), 10),
 			strconv.FormatInt(viper.GetInt64("maxConcurrency"), 10),
 			strconv.FormatInt(viper.GetInt64("lambdaTimeout"), 10),
+			strconv.FormatInt(viper.GetInt64("cache"), 10),
 		})
 		if err != nil {
 			log.Debugf("failed to write %+v - %f", task, err)

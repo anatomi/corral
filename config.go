@@ -29,7 +29,7 @@ func setupDefaults() {
 		"lambdaManageRole":   true,
 		"lambdaS3Key":        "corral_code.zip",
 		"lambdaS3Bucket":     "corral-code-bucket",
-		"lambdaEfsPath":	  "/mnt/efs", // path must always start with "/mnt/"
+		"lambdaEfsPath":	  "/mnt/cache", // path must always start with "/mnt/"
 		"cleanup":            true,
 		"durable":            false, //Should Intermeidiate data be flushed to the filesystem (in conflict with cleanup)
 		"verbose":            false,
@@ -42,7 +42,7 @@ func setupDefaults() {
 		"remoteLoggingHost":  "",
 		"logName":            "activations",
 
-		"cache": 2, //coresponse to corcache.CacheSystemType (2 for Redis)
+		"cache": 4, //coresponse to corcache.CacheSystemType (0 - NoCache, 1 - Local, 2 - Redis, 3 - Olric, 4 - EFS, 5 - DynamoDB)
 
 		"cacheSize": uint64(10 * 1024 * 1024), //corosponse to corcache.Local
 
@@ -64,6 +64,10 @@ func setupDefaults() {
 		"efsVPCSubnetIds": "", // List of subnet ids associated with VPC separated by ';'"
 		"efsVPCSecurityGroupIds": "", // Security group id asociated with VPC, i.e.: "sg-085912345678*****"
 	
+		// DynamoDB config
+		"dynamodbTableName": "CorralCache",
+		"dynamodbRCP": 20,
+		"dynamodbWCP": 20,
 
 	}
 	for key, value := range defaultSettings {
