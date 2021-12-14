@@ -7,6 +7,8 @@ Below are the command line arguments to the program (which can be displayed usin
 ```
     -b string
             S3 bucket path (e.g. s3://benchmark-bucket/)
+    -o string
+            Operation to be performed (w - write, r - read, rsf - read form a single file, all - all of the above)
     -t int
             Number of threads to run (default 1)
     -z string
