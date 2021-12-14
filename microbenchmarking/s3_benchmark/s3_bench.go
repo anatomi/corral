@@ -1,5 +1,3 @@
-// Create EC2 instance 
-
 package main
 
 import (
@@ -90,8 +88,8 @@ func main() {
 			read_time, read_count, bytefmt.ByteSize(uint64(bps)), float64(read_count)/read_time, 0))
 	}
 	
+	// Run the read from same file case
 	if(operation == "rsf" || operation == "all") {
-		// Run the read from same file case
 		running_threads = int32(threads)
 		starttime = time.Now()
 		endtime = starttime.Add(time.Second * time.Duration(duration_secs))
