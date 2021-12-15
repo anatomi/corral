@@ -181,7 +181,7 @@ func runRead(thread_num int) {
 }
 
 func runReadSameFile(thread_num int) {
-	atomic.AddInt32(&read_count, 1)
+	atomic.AddInt32(&read_same_file_count, 1)
 	filename := "file" + strconv.Itoa(thread_num) + ".out"
 	reader, err := cs.OpenReader((filename), 0)
 	if err != nil {

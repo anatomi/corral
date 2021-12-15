@@ -143,17 +143,17 @@ func runWrite(thread_num int) {
 }
 
 func runRead(thread_num int) {
-	for time.Now().Before(endtime) {
-		// reading data from filesystem
-		atomic.AddInt32(&read_count, 1)
-		filename := "file" + strconv.Itoa(thread_num) + ".out"
-		reader, err := cs.OpenReader(cs.Join(filesystem_path, filename), 0)
-		if err != nil {
-			log.Errorf("failed to open reader, %+v", err)
-		}
-		var dataRead []byte
-		_, err = reader.Read(dataRead)
+	// reading data from filesystem
+	atomic.AddInt32(&read_count, 1)
+	filename := "file" + strconv.Itoa(thread_num) + ".out"
+	reader, err := cs.OpenReader(cs.Join(filesystem_path, filename), 0)
+	if err != nil {
+		log.Errorf("failed to open reader, %+v", err)
 	}
+	var dataRead []byte
+	data, err := reader.Read(dataRead)
+	log.Infof("Data: %#v", data)
+
 	read_finish = time.Now()
 	// One less thread
 	atomic.AddInt32(&running_threads, -1)
