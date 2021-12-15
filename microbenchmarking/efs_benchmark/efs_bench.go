@@ -62,11 +62,11 @@ func main() {
 		for atomic.LoadInt32(&running_threads) > 0 {
 			time.Sleep(time.Millisecond)
 		}
-		write_time := write_finish.Sub(starttime).Seconds()
-
-		bps := float64(uint64(write_count)*object_size) / write_time
-		logit(fmt.Sprintf("WRITE time %.5f secs, objects = %d, speed = %sB/sec, %.1f operations/sec. Slowdowns = %d",
-			write_time, write_count, bytefmt.ByteSize(uint64(bps)), float64(write_count)/write_time, 0))
+		write_time := write_finish.Sub(starttime).Milliseconds()
+		
+		bps := float64(uint64(write_count)*object_size) / float64(write_time)
+		logit(fmt.Sprintf("WRITE time %.5f msecs, objects = %d, speed = %sB/msec, %.1f operations/msec. Slowdowns = %d",
+		float64(write_time), write_count, bytefmt.ByteSize(uint64(bps)), float64(write_count)/float64(write_time), 0))
 	}	
 
 	// Run the read case
@@ -82,11 +82,11 @@ func main() {
 		for atomic.LoadInt32(&running_threads) > 0 {
 			time.Sleep(time.Millisecond)
 		}
-		read_time := read_finish.Sub(starttime).Seconds()
+		read_time := read_finish.Sub(starttime).Milliseconds()
 
-		bps = float64(uint64(read_count)*object_size) / read_time
-		logit(fmt.Sprintf("READ time %.5f secs, objects = %d, speed = %sB/sec, %.1f operations/sec. Slowdowns = %d",
-			read_time, read_count, bytefmt.ByteSize(uint64(bps)), float64(read_count)/read_time, 0))
+		bps = float64(uint64(read_count)*object_size) / float64(read_time)
+		logit(fmt.Sprintf("READ time %.5f msecs, objects = %d, speed = %sB/msec, %.1f operations/msec. Slowdowns = %d",
+		float64(read_time), read_count, bytefmt.ByteSize(uint64(bps)), float64(read_count)/float64(read_time), 0))
 	}
 
 	// Run the read from same file case
@@ -102,11 +102,11 @@ func main() {
 		for atomic.LoadInt32(&running_threads) > 0 {
 			time.Sleep(time.Millisecond)
 		}
-		read_same_file_time := read_same_file_finish.Sub(starttime).Seconds()
+		read_same_file_time := read_same_file_finish.Sub(starttime).Milliseconds()
 
-		bps = float64(uint64(read_same_file_count)*object_size) / read_same_file_time
-		logit(fmt.Sprintf("READ SAME FILE time %.5f secs, objects = %d, speed = %sB/sec, %.1f operations/sec. Slowdowns = %d",
-			read_same_file_time, read_count, bytefmt.ByteSize(uint64(bps)), float64(read_same_file_count)/read_same_file_time, 0))
+		bps = float64(uint64(read_same_file_count)*object_size) / float64(read_same_file_time)
+		logit(fmt.Sprintf("READ SAME FILE time %.5f msecs, objects = %d, speed = %sB/msec, %.1f operations/msec. Slowdowns = %d",
+		float64(read_same_file_time), read_same_file_count, bytefmt.ByteSize(uint64(bps)), float64(read_same_file_count)/float64(read_same_file_time), 0))
 	}
 }
 
