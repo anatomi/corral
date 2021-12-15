@@ -70,7 +70,7 @@ func main() {
 		write_time := write_finish.Sub(starttime).Seconds()
 
 		bps := float64(uint64(write_count)*object_size) / write_time
-		logit(fmt.Sprintf("WRITE time %.1f secs, objects = %d, speed = %sB/sec, %.1f operations/sec. Slowdowns = %d",
+		logit(fmt.Sprintf("WRITE time %.5f secs, objects = %d, speed = %sB/sec, %.1f operations/sec. Slowdowns = %d",
 			write_time, write_count, bytefmt.ByteSize(uint64(bps)), float64(write_count)/write_time, 0))
 	}
 
@@ -90,7 +90,7 @@ func main() {
 		read_time := read_finish.Sub(starttime).Seconds()
 
 		bps = float64(uint64(read_count)*object_size) / read_time
-		logit(fmt.Sprintf("READ time %.1f secs, objects = %d, speed = %sB/sec, %.1f operations/sec. Slowdowns = %d",
+		logit(fmt.Sprintf("READ time %.5f secs, objects = %d, speed = %sB/sec, %.1f operations/sec. Slowdowns = %d",
 			read_time, read_count, bytefmt.ByteSize(uint64(bps)), float64(read_count)/read_time, 0))
 	}
 
@@ -110,7 +110,7 @@ func main() {
 		read_same_file_time := read_same_file_finish.Sub(starttime).Seconds()
 
 		bps = float64(uint64(read_same_file_count)*object_size) / read_same_file_time
-		logit(fmt.Sprintf("READ SAME FILE time %.1f secs, objects = %d, speed = %sB/sec, %.1f operations/sec. Slowdowns = %d",
+		logit(fmt.Sprintf("READ SAME FILE time %.5f secs, objects = %d, speed = %sB/sec, %.1f operations/sec. Slowdowns = %d",
 		read_same_file_time, read_same_file_count, bytefmt.ByteSize(uint64(bps)), float64(read_same_file_count)/read_same_file_time, 0))
 	}
 }
