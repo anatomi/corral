@@ -68,7 +68,7 @@ func main() {
 			time.Sleep(time.Millisecond)
 		}
 		write_time := write_finish.Sub(starttime).Seconds()
-
+		log.Infof("Time: %.6f", write_time)
 		bps := float64(uint64(write_count)*object_size) / write_time
 		logit(fmt.Sprintf("WRITE time %.5f secs, objects = %d, speed = %sB/sec, %.1f operations/sec. Slowdowns = %d",
 			write_time, write_count, bytefmt.ByteSize(uint64(bps)), float64(write_count)/write_time, 0))
