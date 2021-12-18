@@ -11,6 +11,7 @@ import (
 	"os"
 	"net/http"
 	"strconv"
+    "math/rand"
 )
 
 var cs corfs.FileSystem
@@ -18,18 +19,21 @@ var err error
 
 var duration_secs, threads, loops int
 var object_size uint64
+var object_data []byte
 var bucket_path string
 var operation string
 var running_threads, write_count, read_count, read_same_file_count, delete_count, upload_slowdown_count, download_slowdown_count, delete_slowdown_count int32
-var starttime, endtime, write_finish, read_finish, read_same_file_finish time.Time
+var starttime, endtime, write_finish, read_finish, delete_finish, read_same_file_finish time.Time
 var bps float64
+
+const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 func main() {
 	fmt.Println("S3 benchmarking")
 	myflag := flag.NewFlagSet("myflag", flag.ExitOnError)
 	myflag.IntVar(&threads, "t", 1, "Number of threads to run")
 	myflag.StringVar(&bucket_path, "b", "", "Bucket name")
-	myflag.StringVar(&operation, "o", "all", "Operarion: w write, r read, rsf readSameFile, all ")
+	myflag.StringVar(&operation, "o", "all", "Operarion: w - write, r - read, rsf - readSameFile, d - delete, all - all test cases")
 	var sizeArg string
 	myflag.StringVar(&sizeArg, "z", "1M", "Size of objects in bytes with postfix K, M, and G")
 	if err := myflag.Parse(os.Args[1:]); err != nil {
@@ -42,6 +46,9 @@ func main() {
 	if object_size, err = bytefmt.ToBytes(sizeArg); err != nil {
 		log.Fatalf("Invalid -z argument for object size: %v", err)
 	}
+
+	// Generate random byte array
+	object_data = RandBytesRmndr(object_size)
 
 	// Creates and initializes new S3 "filesystem"
 	cs, err = corfs.InitFilesystem(1)
@@ -58,16 +65,16 @@ func main() {
 			go runWrite(n)
 		}
 
-		// Wait for it to finish
 		for atomic.LoadInt32(&running_threads) > 0 {
 			time.Sleep(time.Millisecond)
 		}
 		write_time := write_finish.Sub(starttime).Milliseconds()
 		
 		bps := float64(uint64(write_count)*object_size) / float64(write_time)
-		logit(fmt.Sprintf("WRITE time %.5f msecs, objects = %d, speed = %sB/msec, %.1f operations/msec. Slowdowns = %d",
+		logit(fmt.Sprintf("WRITE time %.5f msecs, objects = %d, speed = %sB/msec, %.5f operations/msec. Slowdowns = %d",
 		float64(write_time), write_count, bytefmt.ByteSize(uint64(bps)), float64(write_count)/float64(write_time), 0))
 	}
+
 	// Run the read case
 	if(operation == "r" || operation == "all") {
 		running_threads = int32(threads)
@@ -77,14 +84,13 @@ func main() {
 			go runRead(n)
 		}
 
-		// Wait for it to finish
 		for atomic.LoadInt32(&running_threads) > 0 {
 			time.Sleep(time.Millisecond)
 		}
 		read_time := read_finish.Sub(starttime).Milliseconds()
 
 		bps = float64(uint64(read_count)*object_size) / float64(read_time)
-		logit(fmt.Sprintf("READ time %.5f msecs, objects = %d, speed = %sB/msec, %.1f operations/msec. Slowdowns = %d",
+		logit(fmt.Sprintf("READ time %.5f msecs, objects = %d, speed = %sB/msec, %.5f operations/msec. Slowdowns = %d",
 		float64(read_time), read_count, bytefmt.ByteSize(uint64(bps)), float64(read_count)/float64(read_time), 0))
 	}
 	
@@ -97,15 +103,33 @@ func main() {
 			go runReadSameFile(n)
 		}
 
-		// Wait for it to finish
 		for atomic.LoadInt32(&running_threads) > 0 {
 			time.Sleep(time.Millisecond)
 		}
 		read_same_file_time := read_same_file_finish.Sub(starttime).Milliseconds()
 
 		bps = float64(uint64(read_same_file_count)*object_size) / float64(read_same_file_time)
-		logit(fmt.Sprintf("READ SAME FILE time %.5f msecs, objects = %d, speed = %sB/msec, %.1f operations/msec. Slowdowns = %d",
+		logit(fmt.Sprintf("READ SAME FILE time %.5f msecs, objects = %d, speed = %sB/msec, %.5f operations/msec. Slowdowns = %d",
 		float64(read_same_file_time), read_same_file_count, bytefmt.ByteSize(uint64(bps)), float64(read_same_file_count)/float64(read_same_file_time), 0))
+	}
+
+	// Run the delete case
+	if(operation == "d" || operation == "all") {
+		running_threads = int32(threads)
+		starttime := time.Now()
+		endtime = starttime.Add(time.Second * time.Duration(duration_secs))
+		for n := 1; n <= threads; n++ {
+			go runDelete(n)
+		}
+
+		for atomic.LoadInt32(&running_threads) > 0 {
+			time.Sleep(time.Millisecond)
+		}
+		delete_time := delete_finish.Sub(starttime).Milliseconds()
+		
+		bps := float64(uint64(delete_count)*object_size) / float64(delete_time)
+		logit(fmt.Sprintf("DELETE time %.5f msecs, objects = %d, speed = %sB/msec, %.5f operations/msec. Slowdowns = %d",
+		float64(delete_time), delete_count, bytefmt.ByteSize(uint64(bps)), float64(delete_count)/float64(delete_time), 0))
 	}
 
 }
@@ -118,11 +142,7 @@ func runWrite(thread_num int) {
 		log.Errorf("failed to open writer, %+v",err)
 	}
 
-	// generate "zero" byte array of given size
-	data := make([]byte, object_size)
-	// rand.Read(data)
-
-	_, err = writer.Write(data)
+	_, err = writer.Write(object_data)
 	if err != nil {
 		log.Fatal("Failed to write data,", err)
 	}
@@ -134,7 +154,6 @@ func runWrite(thread_num int) {
 
 		defer func() {
 			write_finish = time.Now()
-			// One less thread
 			atomic.AddInt32(&running_threads, -1)
 		}()
 
@@ -152,7 +171,6 @@ func runRead(thread_num int) {
 	_, err = reader.Read(dataRead)
 	
 	read_finish = time.Now()
-	// One less thread
 	atomic.AddInt32(&running_threads, -1)
 }
 
@@ -167,7 +185,18 @@ func runReadSameFile(thread_num int) {
 	_, err = reader.Read(dataRead)
 	
 	read_same_file_finish = time.Now()
-	// One less thread
+	atomic.AddInt32(&running_threads, -1)
+}
+
+func runDelete(thread_num int) {
+	atomic.AddInt32(&delete_count, 1)
+	filename := "file" + strconv.Itoa(thread_num) + ".out"
+	err := cs.Delete(cs.Join(bucket_path, filename))
+	if err != nil {
+		log.Errorf("failed to delete file, %+v", err)
+	}
+	
+	delete_finish = time.Now()
 	atomic.AddInt32(&running_threads, -1)
 }
 
@@ -178,4 +207,12 @@ func logit(msg string) {
 		logfile.WriteString(time.Now().Format(http.TimeFormat) + ": " + msg + "\n")
 		logfile.Close()
 	}
+}
+
+func RandBytesRmndr(n uint64) []byte {
+    b := make([]byte, n)
+    for i := range b {
+        b[i] = letterBytes[rand.Int63() % int64(len(letterBytes))]
+    }
+    return b
 }

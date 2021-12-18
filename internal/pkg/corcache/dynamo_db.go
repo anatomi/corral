@@ -148,9 +148,7 @@ func (D *DynamoCache) ListFiles(pathGlob string) ([]corfs.FileInfo, error) {
 	if err != nil {
 		return nil,err
 	}
-	log.Infof("LIST Result: %#v", result)
 
-	log.Infof("LIST ConsumedCapacity: %#v", result.ConsumedCapacity)
 	files := make([]corfs.FileInfo, 0)
 	if result.Items != nil {
 		for _, file := range result.Items {
@@ -253,8 +251,7 @@ func (b *bufferedDynamodbWriter) Close() error {
 		TableName:              aws.String(b.config.TableName),
 	}
 	
-	result, err := b.client.PutItem(input)
-	log.Infof("PUT ConsumedCapacity: %#v", result.ConsumedCapacity)
+	_, err := b.client.PutItem(input)
 	return err
 }
 
@@ -286,9 +283,6 @@ func (D *DynamoCache) OpenWriter(filePath string) (io.WriteCloser, error) {
 	}
 	
 	result, err := D.Client.GetItem(input)
-	log.Infof("OPEN WRITER Result: %#v", result)
-
-	log.Infof("OPEN WRITER ConsumedCapacity: %#v", result.ConsumedCapacity)
 	if err != nil {
 		return nil, err
 	}
@@ -303,10 +297,10 @@ func (D *DynamoCache) OpenWriter(filePath string) (io.WriteCloser, error) {
 func (D *DynamoCache) Delete(path string) error {
 	input := &dynamodb.DeleteItemInput{
 		Key: map[string]*dynamodb.AttributeValue{
-			TablePartitionKey: {
+			D.Config.TablePartitionKey: {
 				S: aws.String(path),
 			},
-			TableSortKey: {
+			D.Config.TableSortKey: {
 				S: aws.String(path),
 			},
 		},
@@ -314,9 +308,7 @@ func (D *DynamoCache) Delete(path string) error {
 		ReturnConsumedCapacity: aws.String("TOTAL"),
 	}
 
-	result, err := D.Client.DeleteItem(input)
-	log.Infof("DELETE ConsumedCapacity: %#v", result.ConsumedCapacity)
-
+	_, err := D.Client.DeleteItem(input)
 	return err
 }
 
