@@ -46,7 +46,7 @@ func main() {
 
 	// Generate random byte array
 	object_data = RandBytesRmndr(object_size)
-
+	log.Infof("Data %#v", object_data)
 	cs,err = corcache.NewRedisBackedCache(corcache.DeploymentType(2))
 	if err != nil {
 		log.Fatal("failed to init redis cache:",err)
@@ -75,8 +75,8 @@ func main() {
 		write_time := write_finish.Sub(starttime).Milliseconds()
 		
 		bps := float64(uint64(write_count)*object_size) / float64(write_time)
-		logit(fmt.Sprintf("WRITE time %.5f msecs, objects = %d, speed = %sB/msec, %.5f operations/msec. Slowdowns = %d",
-		float64(write_time), write_count, bytefmt.ByteSize(uint64(bps)), float64(write_count)/float64(write_time), 0))
+		logit(fmt.Sprintf("WRITE time %.5f msecs, objects = %d, speed = %sB/msec, %.5f operations/msec.",
+		float64(write_time), write_count, bytefmt.ByteSize(uint64(bps)), float64(write_count)/float64(write_time)))
 	}
 
 	// Run the read case
@@ -94,8 +94,8 @@ func main() {
 		read_time := read_finish.Sub(starttime).Milliseconds()
 
 		bps = float64(uint64(read_count)*object_size) / float64(read_time)
-		logit(fmt.Sprintf("READ time %.5f msecs, objects = %d, speed = %sB/msec, %.5f operations/msec. Slowdowns = %d",
-		float64(read_time), read_count, bytefmt.ByteSize(uint64(bps)), float64(read_count)/float64(read_time), 0))
+		logit(fmt.Sprintf("READ time %.5f msecs, objects = %d, speed = %sB/msec, %.5f operations/msec.",
+		float64(read_time), read_count, bytefmt.ByteSize(uint64(bps)), float64(read_count)/float64(read_time)))
 	}
 
 	// Run the read from same file case
@@ -113,8 +113,8 @@ func main() {
 		read_same_file_time := read_same_file_finish.Sub(starttime).Milliseconds()
 
 		bps = float64(uint64(read_same_file_count)*object_size) / float64(read_same_file_time)
-		logit(fmt.Sprintf("READ SAME FILE time %.5f msecs, objects = %d, speed = %sB/msec, %.5f operations/msec. Slowdowns = %d",
-		float64(read_same_file_time), read_same_file_count, bytefmt.ByteSize(uint64(bps)), float64(read_same_file_count)/float64(read_same_file_time), 0))
+		logit(fmt.Sprintf("READ SAME FILE time %.5f msecs, objects = %d, speed = %sB/msec, %.5f operations/msec.",
+		float64(read_same_file_time), read_same_file_count, bytefmt.ByteSize(uint64(bps)), float64(read_same_file_count)/float64(read_same_file_time)))
 	}
 
 	// Run the delete case
@@ -132,8 +132,8 @@ func main() {
 		delete_time := delete_finish.Sub(starttime).Milliseconds()
 		
 		bps := float64(uint64(delete_count)*object_size) / float64(delete_time)
-		logit(fmt.Sprintf("DELETE time %.5f msecs, objects = %d, speed = %sB/msec, %.5f operations/msec. Slowdowns = %d",
-		float64(delete_time), delete_count, bytefmt.ByteSize(uint64(bps)), float64(delete_count)/float64(delete_time), 0))
+		logit(fmt.Sprintf("DELETE time %.5f msecs, objects = %d, speed = %sB/msec, %.5f operations/msec.",
+		float64(delete_time), delete_count, bytefmt.ByteSize(uint64(bps)), float64(delete_count)/float64(delete_time)))
 	}
 }
 
