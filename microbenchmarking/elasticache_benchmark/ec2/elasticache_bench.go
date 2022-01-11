@@ -40,13 +40,18 @@ func main() {
 	if err := myflag.Parse(os.Args[1:]); err != nil {
 		os.Exit(1)
 	}
+
 	if redis_addrs == "" {
 		log.Fatal("Missing argument -a for redis cluster endpoint.")
 	}
 
+	if object_size, err = bytefmt.ToBytes(sizeArg); err != nil {
+		log.Fatalf("Invalid -z argument for object size: %v", err)
+	}
+
 	// Generate random byte array
 	object_data = RandBytesRmndr(object_size)
-	log.Infof("Data %#v", object_data)
+	
 	cs,err = corcache.NewRedisBackedCache(corcache.DeploymentType(2))
 	if err != nil {
 		log.Fatal("failed to init redis cache:",err)
