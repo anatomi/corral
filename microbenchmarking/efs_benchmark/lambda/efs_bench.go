@@ -6,7 +6,6 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 	log "github.com/sirupsen/logrus"
 	"code.cloudfoundry.org/bytefmt"
-	"sync/atomic"
 	"time"
 	"strconv"
     "math/rand"
@@ -15,28 +14,36 @@ import (
 var cs *corcache.AWSEFSCache
 var err error
 
-var threads int
+var task_id int
+var job_id string
 var object_size uint64
 var object_data []byte
 var filesystem_path string
 var operation string
-var running_threads, write_count, read_count, read_same_file_count, delete_count, upload_slowdown_count, download_slowdown_count, delete_slowdown_count int32
 var starttime, write_finish, read_finish, delete_finish, read_same_file_finish time.Time
 var bps float64
+var write_time, read_time, read_same_file_time, delete_time float64
 
 const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-var permittedOperations = []string{"w", "r", "rsf", "d", "all"}
+var permittedOperations = []string{"w", "r", "rsf", "d"}
 
 type Event struct {
-	Threads int
+	TaskID int
+	JobID string
 	FilesystemPath string
 	Operation string
 	Filesize string
 }
 
-func HandleLambdaEvent(event Event) (error) {
-	fmt.Println("EFS benchmarking")
-	running_threads, write_count, read_count, read_same_file_count, delete_count, upload_slowdown_count, download_slowdown_count, delete_slowdown_count = 0, 0, 0, 0, 0, 0, 0, 0 
+type Response struct {
+	WriteTime float64
+	ReadTime float64
+	RSFTime float64
+	DeleteTime float64
+}
+
+func HandleLambdaEvent(event Event) (Response, error) {
+	fmt.Println("---------- EFS benchmarking ----------")
 	bps = 0
 	
 	if event.FilesystemPath == "" {
@@ -45,10 +52,16 @@ func HandleLambdaEvent(event Event) (error) {
 		filesystem_path = event.FilesystemPath
 	}
 
-	if event.Threads == 0 {
-		log.Fatal("Missing number of threads.")
+	if event.TaskID == 0 {
+		log.Fatal("Missing id of task.")
 	} else {
-		threads = event.Threads
+		task_id = event.TaskID
+	}
+
+	if event.JobID == "" {
+		log.Fatal("Missing id of job.")
+	} else {
+		job_id = event.JobID
 	}
 
 	if object_size, err = bytefmt.ToBytes(event.Filesize); err != nil {
@@ -56,7 +69,7 @@ func HandleLambdaEvent(event Event) (error) {
 	}
 
 	if event.Operation == "" {
-		operation = "all"
+		log.Fatal("Missing operation parameter -o")
 	} else {
 		if (contains(permittedOperations, event.Operation)) {
 			operation = event.Operation
@@ -65,105 +78,81 @@ func HandleLambdaEvent(event Event) (error) {
 		}
 	}
 
-
-	// Generate random byte array
-	object_data = RandBytesRmndr(object_size)
 	
 	cs, err = corcache.NewEFSCache()
 	if err != nil {
 		log.Fatal("failed to init EFS cache:", err)
 	}
 
-	log.Infof("Benchark config: threads -  %d, filesize - %s, operation - %s", threads, event.Filesize, operation)
-
+	log.Infof("------------------- Job: %s -------------------", job_id)
+	log.Infof("Task config: id -  %d, filesize - %s, operation - %s", task_id, event.Filesize, operation)
+	
 	// Run the write case
-	if(operation == "w" || operation == "all") {
-		running_threads = int32(threads)
-		starttime := time.Now()
-		for n := 1; n <= threads; n++ {
-			go runWrite(n)
-		}
+	if(operation == "w") {
+		// Generate random byte array
+		object_data = RandBytesRmndr(object_size)
+		starttime = time.Now()
+		runWrite(task_id)
 
-		for atomic.LoadInt32(&running_threads) > 0 {
-			time.Sleep(time.Millisecond)
-		}
-		write_time := write_finish.Sub(starttime).Milliseconds()
+		write_time = float64(write_finish.Sub(starttime).Milliseconds())
 		
-		bps := float64(uint64(write_count)*object_size) / float64(write_time)
-		log.Infof("WRITE time %.5f msecs, objects = %d, speed = %sB/msec, %.5f operations/msec.",
-		float64(write_time), write_count, bytefmt.ByteSize(uint64(bps)), float64(write_count)/float64(write_time))
+		bps = float64(object_size) / write_time
+		log.Infof("Task %d WRITE time %.5f msecs, speed = %.5fB/msec",
+		task_id, write_time, bps)
 	}	
 
 	// Run the read case
-	if(operation == "r" || operation == "all") {
-		running_threads = int32(threads)
+	if(operation == "r") {
 		starttime = time.Now()
-		for n := 1; n <= threads; n++ {
-			go runRead(n)
-		}
+		runRead(task_id)
+		
+		read_time = float64(read_finish.Sub(starttime).Milliseconds())
 
-		for atomic.LoadInt32(&running_threads) > 0 {
-			time.Sleep(time.Millisecond)
-		}
-		read_time := read_finish.Sub(starttime).Milliseconds()
-
-		bps = float64(uint64(read_count)*object_size) / float64(read_time)
-		log.Infof("READ time %.5f msecs, objects = %d, speed = %sB/msec, %.5f operations/msec.",
-		float64(read_time), read_count, bytefmt.ByteSize(uint64(bps)), float64(read_count)/float64(read_time))
+		bps = float64(object_size) / read_time
+		log.Infof("Task %d READ time %.5f msecs, speed = %.5fB/msec.",
+		task_id, read_time, bps)
 	}
 
 	// Run the read from same file case
-	if(operation == "rsf" || operation == "all") {
-		running_threads = int32(threads)
+	if(operation == "rsf") {
 		starttime = time.Now()
-		for n := 1; n <= threads; n++ {
-			go runReadSameFile(n)
-		}
+		runReadSameFile(task_id)
+		
+		read_same_file_time = float64(read_same_file_finish.Sub(starttime).Milliseconds())
 
-		// Wait for it to finish
-		for atomic.LoadInt32(&running_threads) > 0 {
-			time.Sleep(time.Millisecond)
-		}
-		read_same_file_time := read_same_file_finish.Sub(starttime).Milliseconds()
-
-		bps = float64(uint64(read_same_file_count)*object_size) / float64(read_same_file_time)
-		log.Infof("READ SAME FILE time %.5f msecs, objects = %d, speed = %sB/msec, %.5f operations/msec.",
-		float64(read_same_file_time), read_same_file_count, bytefmt.ByteSize(uint64(bps)), float64(read_same_file_count)/float64(read_same_file_time))
+		bps = float64(object_size) / read_same_file_time
+		log.Infof("Task %d READ SAME FILE time %.5f msecs, speed = %.5fB/msec.",
+		task_id, read_same_file_time, bps)
 	}
 
 	// Run the delete case
-	if(operation == "d" || operation == "all") {
-		running_threads = int32(threads)
-		starttime := time.Now()
-		for n := 1; n <= threads; n++ {
-			go runDelete(n)
-		}
+	if(operation == "d") {
+		starttime = time.Now()
+		runDelete(task_id)
 
-		for atomic.LoadInt32(&running_threads) > 0 {
-			time.Sleep(time.Millisecond)
-		}
-		delete_time := delete_finish.Sub(starttime).Milliseconds()
+		delete_time = float64(delete_finish.Sub(starttime).Milliseconds())
 		
-		bps := float64(uint64(delete_count)*object_size) / float64(delete_time)
-		log.Infof("DELETE time %.5f msecs, objects = %d, speed = %sB/msec, %.5f operations/msec.",
-		float64(delete_time), delete_count, bytefmt.ByteSize(uint64(bps)), float64(delete_count)/float64(delete_time))
+		bps = float64(object_size) / delete_time
+		log.Infof("Task %d DELETE time %.5f msecs, speed = %.5fB/msec.",
+		task_id, delete_time, bps)
 	}
 
-	return nil
+	return  Response{WriteTime: write_time, ReadTime: read_time, RSFTime: read_same_file_time, DeleteTime: delete_time}, nil
 }
 
 func main() {
 	lambda.Start(HandleLambdaEvent)
 }
 
-func runWrite(thread_num int) {
-	atomic.AddInt32(&write_count, 1)
-	filename := "file" + strconv.Itoa(thread_num) + ".out"
+func runWrite(worker_id int) {
+	filename := "file" + strconv.Itoa(worker_id) + ".out"
+	log.Infof("Worker_%d START TIME OpenWriter: %+v", worker_id, time.Now())
 	writer, err := cs.OpenWriter(cs.Join(filesystem_path, filename))
 	if err != nil {
 		log.Errorf("failed to open writer, %+v",err)
 	}
 
+	log.Infof("Worker_%d START TIME Write: %+v", worker_id, time.Now())
 	_, err = writer.Write(object_data)
 	if err != nil {
 		log.Fatal("Failed to write data,", err)
@@ -176,51 +165,59 @@ func runWrite(thread_num int) {
 
 		defer func() {
 			write_finish = time.Now()
-			// One less thread
-			atomic.AddInt32(&running_threads, -1)
+			log.Infof("Worker_%d END TIME writing request: %+v", worker_id, write_finish)
 		}()
 
 	}()
 }
 
-func runRead(thread_num int) {
-	atomic.AddInt32(&read_count, 1)
-	filename := "file" + strconv.Itoa(thread_num) + ".out"
+func runRead(worker_id int) {
+	filename := "file" + strconv.Itoa(worker_id) + ".out"
+	log.Infof("Worker_%d START TIME OpenReader: %+v", worker_id, time.Now())
 	reader, err := cs.OpenReader(cs.Join(filesystem_path, filename), 0)
 	if err != nil {
 		log.Errorf("failed to open reader, %+v", err)
 	}
 	var dataRead []byte
+	log.Infof("Worker_%d START TIME Read: %+v", worker_id, time.Now())
 	_, err = reader.Read(dataRead)
 
-	read_finish = time.Now()
-	atomic.AddInt32(&running_threads, -1)
+	defer func() {
+		read_finish = time.Now()
+		log.Infof("Worker_%d END TIME reading request: %+v", worker_id, read_finish)
+	}()
 }
 
-func runReadSameFile(thread_num int) {
-	atomic.AddInt32(&read_same_file_count, 1)
-	filename := "file" + strconv.Itoa(1) + ".out"
+func runReadSameFile(worker_id int) {
+	filename := "file1.out"
+	log.Infof("Worker_%d START TIME OpenReader: %+v", worker_id, time.Now())
 	reader, err := cs.OpenReader(cs.Join(filesystem_path, filename), 0)
 	if err != nil {
 		log.Errorf("failed to open reader, %+v", err)
 	}
 	var dataRead []byte
+	log.Infof("Worker_%d START TIME Read same file: %+v", worker_id, time.Now())
 	_, err = reader.Read(dataRead)
 	
-	read_same_file_finish = time.Now()
-	atomic.AddInt32(&running_threads, -1)
+	defer func() {
+		read_same_file_finish = time.Now()
+		log.Infof("Worker_%d END TIME reading single file request: %+v", worker_id, read_same_file_finish)
+	}()
 }
 
-func runDelete(thread_num int) {
-	atomic.AddInt32(&delete_count, 1)
-	filename := "file" + strconv.Itoa(thread_num) + ".out"
+func runDelete(worker_id int) {
+	filename := "file" + strconv.Itoa(worker_id) + ".out"
+	log.Infof("Worker_%d START TIME delete: %+v", worker_id, time.Now())
 	err := cs.Delete(cs.Join(filesystem_path, filename))
 	if err != nil {
 		log.Errorf("failed to delete file, %+v", err)
 	}
 
-	delete_finish = time.Now()
-	atomic.AddInt32(&running_threads, -1)
+	defer func() {
+		delete_finish = time.Now()
+		log.Infof("Worker_%d END TIME delete request: %+v", worker_id, delete_finish)
+
+	}()
 }
 
 func RandBytesRmndr(n uint64) []byte {
