@@ -26,6 +26,7 @@ var write_time, read_time, read_same_file_time, delete_time float64
 
 const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 var permittedOperations = []string{"w", "r", "rsf", "d"}
+var invokeCount = 0
 
 type Event struct {
 	WorkerID int
@@ -44,6 +45,13 @@ type Response struct {
 
 func HandleLambdaEvent(event Event) (Response, error) {
 	fmt.Println("---------- EFS benchmarking ----------")
+	if invokeCount == 0 {
+		fmt.Println("~~~~~~~~ COLD START ~~~~~~~~")
+	} else {
+		fmt.Println("~~~~~~~~ WARM START ~~~~~~~~")
+	}
+
+	invokeCount = invokeCount + 1
 	bps = 0
 	
 	if event.FilesystemPath == "" {
