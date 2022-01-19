@@ -123,6 +123,7 @@ func HandleLambdaEvent(event Event) (Response, error) {
 		// Generate random byte array
 		object_data = RandBytesRmndr(object_size)
 		starttime = time.Now()
+		log.Infof("Worker_%d WRITE START TIME: %+v", worker_id, starttime)
 		runWrite(worker_id)
 
 		write_time = float64(write_finish.Sub(starttime).Milliseconds())
@@ -135,6 +136,7 @@ func HandleLambdaEvent(event Event) (Response, error) {
 	// Run the read case
 	if(operation == "r") {
 		starttime = time.Now()
+		log.Infof("Worker_%d READ START TIME: %+v", worker_id, starttime)
 		runRead(worker_id)
 		
 		read_time = float64(read_finish.Sub(starttime).Milliseconds())
@@ -147,6 +149,7 @@ func HandleLambdaEvent(event Event) (Response, error) {
 	// Run the read from same file case
 	if(operation == "rsf") {
 		starttime = time.Now()
+		log.Infof("Worker_%d READ SAME FILE START TIME: %+v", worker_id, starttime)
 		runReadSameFile(worker_id)
 		
 		read_same_file_time = float64(read_same_file_finish.Sub(starttime).Milliseconds())
@@ -159,6 +162,7 @@ func HandleLambdaEvent(event Event) (Response, error) {
 	// Run the delete case
 	if(operation == "d") {
 		starttime = time.Now()
+		log.Infof("Worker_%d DELETE START TIME: %+v", worker_id, starttime)
 		runDelete(worker_id)
 
 		delete_time = float64(delete_finish.Sub(starttime).Milliseconds())
@@ -177,26 +181,25 @@ func main() {
 
 func runWrite(worker_id int) {
 	filename := "file" + strconv.Itoa(worker_id) + ".out"
-	log.Infof("Worker_%d START TIME OpenWriter: %+v", worker_id, time.Now())
 	writer, err := cs.OpenWriter(filename)
 	if err != nil {
 		log.Errorf("failed to open writer, %+v",err)
 	}
 
-	log.Infof("Worker_%d START TIME Write: %+v", worker_id, time.Now())
 	_, err = writer.Write(object_data)
 	if err != nil {
 		log.Fatal("Failed to write data,", err)
 	}
+
 	defer func() {
 		err = writer.Close()
 		if err != nil{
-			log.Errorf("Failed to write: %#v", err)
+			log.Errorf("Failed to close writer: %#v", err)
 		}
 
 		defer func() {
 			write_finish = time.Now()
-			log.Infof("Worker_%d END TIME writing request: %+v", worker_id, write_finish)
+			log.Infof("Worker_%d WRITE END TIME: %+v", worker_id, write_finish)
 		}()
 
 	}()
@@ -204,41 +207,50 @@ func runWrite(worker_id int) {
 
 func runRead(worker_id int) {
 	filename := "file" + strconv.Itoa(worker_id) + ".out"
-	log.Infof("Worker_%d START TIME OpenReader: %+v", worker_id, time.Now())
 	reader, err := cs.OpenReader((filename), 0)
 	if err != nil {
 		log.Errorf("failed to open reader, %+v", err)
 	}
 	var dataRead []byte
-	log.Infof("Worker_%d START TIME Read: %+v", worker_id, time.Now())
 	_, err = reader.Read(dataRead)
 
 	defer func() {
-		read_finish = time.Now()
-		log.Infof("Worker_%d END TIME reading request: %+v", worker_id, read_finish)
+		err = reader.Close()
+		if err != nil{
+			log.Errorf("Failed to close reader: %#v", err)
+		}
+
+		defer func() {
+			read_finish = time.Now()
+			log.Infof("Worker_%d READ END TIME: %+v", worker_id, read_finish)
+		}()
 	}()
 }
 
 func runReadSameFile(worker_id int) {
 	filename := "file1.out"
-	log.Infof("Worker_%d START TIME OpenReader: %+v", worker_id, time.Now())
 	reader, err := cs.OpenReader((filename), 0)
 	if err != nil {
 		log.Errorf("failed to open reader, %+v", err)
 	}
 	var dataRead []byte
-	log.Infof("Worker_%d START TIME Read same file: %+v", worker_id, time.Now())
 	_, err = reader.Read(dataRead)
 	
 	defer func() {
-		read_same_file_finish = time.Now()
-		log.Infof("Worker_%d END TIME reading single file request: %+v", worker_id, read_same_file_finish)
+		err = reader.Close()
+		if err != nil{
+			log.Errorf("Failed to close reader: %#v", err)
+		}
+
+		defer func() {
+			read_same_file_finish = time.Now()
+			log.Infof("Worker_%d READ SAME FILE END TIME: %+v", worker_id, read_same_file_finish)
+		}()
 	}()
 }
 
 func runDelete(worker_id int) {
 	filename := "file" + strconv.Itoa(worker_id) + ".out"
-	log.Infof("Worker_%d START TIME delete: %+v", worker_id, time.Now())
 	err := cs.Delete(filename)
 	if err != nil {
 		log.Errorf("failed to delete file, %+v", err)
@@ -246,7 +258,7 @@ func runDelete(worker_id int) {
 	
 	defer func() {
 		delete_finish = time.Now()
-		log.Infof("Worker_%d END TIME delete request: %+v", worker_id, delete_finish)
+		log.Infof("Worker_%d DELETE END TIME: %+v", worker_id, delete_finish)
 	}()
 }
 
