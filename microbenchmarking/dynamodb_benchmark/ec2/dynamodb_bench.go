@@ -91,7 +91,7 @@ func main() {
 		// Generate random byte array
 		object_data = RandBytesRmndr(object_size)
 		starttime = time.Now()
-		log.Infof("Worker_%d WRITE_START_TIME %+v", worker_id, starttime)
+		logit(fmt.Sprintf("Worker_%d WRITE_START_TIME %+v", worker_id, starttime), "dynamo_benchmark_"+job_id+".log")		
 		runWrite(worker_id)
 		
 		write_time = float64(write_finish.Sub(starttime).Milliseconds())
