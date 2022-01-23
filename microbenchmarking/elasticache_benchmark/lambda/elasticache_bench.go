@@ -108,53 +108,53 @@ func HandleLambdaEvent(event Event) (Response, error) {
 		// Generate random byte array
 		object_data = RandBytesRmndr(object_size)
 		starttime = time.Now()
-		log.Infof("Worker_%d WRITE START TIME: %+v", worker_id, starttime)
+		log.Infof("%s Worker_%d WRITE_START_TIME %+v", job_id, worker_id, starttime)
 		runWrite(worker_id)
 
 		write_time = float64(write_finish.Sub(starttime).Milliseconds())
 		
 		bps = float64(object_size) / write_time
-		log.Infof("Worker %d WRITE time %.5f msecs, speed = %.5fB/msec",
-		worker_id, write_time, bps)
+		log.Infof("%s Worker_%d WRITE time %.5f msecs, speed = %.5f B/msec",
+		job_id, worker_id, write_time, bps)
 	}
 
 	// Run the read case
 	if(operation == "r") {
 		starttime = time.Now()
-		log.Infof("Worker_%d READ START TIME: %+v", worker_id, starttime)
+		log.Infof("%s Worker_%d READ_START_TIME %+v", job_id, worker_id, starttime)
 		runRead(worker_id)
 		
 		read_time = float64(read_finish.Sub(starttime).Milliseconds())
 
 		bps = float64(object_size) / read_time
-		log.Infof("Worker %d READ time %.5f msecs, speed = %.5fB/msec.",
-		worker_id, read_time, bps)
+		log.Infof("%s Worker_%d READ time %.5f msecs, speed = %.5f B/msec.",
+		job_id, worker_id, read_time, bps)
 	}
 
 	// Run the read from same file case
 	if(operation == "rsf") {
 		starttime = time.Now()
-		log.Infof("Worker_%d READ SAME FILE START TIME: %+v", worker_id, starttime)
+		log.Infof("%s Worker_%d RSF_START_TIME %+v", job_id, worker_id, starttime)
 		runReadSameFile(worker_id)
 		
 		read_same_file_time = float64(read_same_file_finish.Sub(starttime).Milliseconds())
 
 		bps = float64(object_size) / read_same_file_time
-		log.Infof("Worker %d READ SAME FILE time %.5f msecs, speed = %.5fB/msec.",
-		worker_id, read_same_file_time, bps)
+		log.Infof("%s Worker_%d RSF time %.5f msecs, speed = %.5f B/msec.",
+		job_id, worker_id, read_same_file_time, bps)
 	}
 
 	// Run the delete case
 	if(operation == "d") {
 		starttime = time.Now()
-		log.Infof("Worker_%d DELETE START TIME: %+v", worker_id, starttime)
+		log.Infof("%s Worker_%d DELETE_START_TIME %+v", job_id, worker_id, starttime)
 		runDelete(worker_id)
 
 		delete_time = float64(delete_finish.Sub(starttime).Milliseconds())
 		
 		bps = float64(object_size) / delete_time
-		log.Infof("Worker %d DELETE time %.5f msecs, speed = %.5fB/msec.",
-		worker_id, delete_time, bps)
+		log.Infof("%s Worker_%d DELETE time %.5f msecs, speed = %.5fB/msec.",
+		job_id, worker_id, delete_time, bps)
 	}
 
 	return  Response{WriteTime: write_time, ReadTime: read_time, RSFTime: read_same_file_time, DeleteTime: delete_time}, nil
@@ -183,7 +183,7 @@ func runWrite(worker_id int) {
 
 		defer func() {
 			write_finish = time.Now()
-			log.Infof("Worker_%d WRITE END TIME: %+v", worker_id, write_finish)
+			log.Infof("%s Worker_%d WRITE_END_TIME %+v", job_id, worker_id, write_finish)
 		}()
 
 	}()
@@ -206,7 +206,7 @@ func runRead(worker_id int) {
 
 		defer func() {
 			read_finish = time.Now()
-			log.Infof("Worker_%d READ END TIME: %+v", worker_id, read_finish)
+			log.Infof("%s Worker_%d READ_END_TIME %+v", job_id, worker_id, read_finish)
 		}()
 	}()
 }
@@ -228,7 +228,7 @@ func runReadSameFile(worker_id int) {
 
 		defer func() {
 			read_same_file_finish = time.Now()
-			log.Infof("Worker_%d READ SAME FILE END TIME: %+v", worker_id, read_same_file_finish)
+			log.Infof("%s Worker_%d RSF_END_TIME %+v", job_id, worker_id, read_same_file_finish)
 		}()
 	}()
 }
@@ -242,7 +242,7 @@ func runDelete(worker_id int) {
 	
 	defer func() {
 		delete_finish = time.Now()
-		log.Infof("Worker_%d DELETE END TIME: %+v", worker_id, delete_finish)
+		log.Infof("%s Worker_%d DELETE_END_TIME %+v", job_id, worker_id, delete_finish)
 	}()
 }
 

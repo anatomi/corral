@@ -66,52 +66,52 @@ func main() {
 		// Generate random byte array
 		object_data = RandBytesRmndr(object_size)
 		starttime = time.Now()
-		logit(fmt.Sprintf("Worker_%d WRITE START TIME: %+v", worker_id, starttime), "efs_benchmark_"+job_id+".log")
+		logit(fmt.Sprintf("Worker_%d WRITE_START_TIME %+v", worker_id, starttime), "efs_benchmark_"+job_id+".log")
 		runWrite(worker_id)
 		
 		write_time = float64(write_finish.Sub(starttime).Milliseconds())
 		
 		bps := float64(object_size) / write_time
-		logit(fmt.Sprintf("Worker %d WRITE time %.5f msecs, speed = %.5fB/msec.",
+		logit(fmt.Sprintf("Worker_%d WRITE time %.5f msecs, speed = %.5f B/msec.",
 		worker_id, write_time, bps), "efs_benchmark_"+job_id+".log")
 	}	
 
 	// Run the read case
 	if(operation == "r") {
 		starttime = time.Now()
-		logit(fmt.Sprintf("Worker_%d READ START TIME: %+v", worker_id, starttime), "efs_benchmark_"+job_id+".log") 
+		logit(fmt.Sprintf("Worker_%d READ_START_TIME %+v", worker_id, starttime), "efs_benchmark_"+job_id+".log") 
 		runRead(worker_id)
 		
 		read_time := float64(read_finish.Sub(starttime).Milliseconds())
 
 		bps = float64(object_size) / read_time
-		logit(fmt.Sprintf("Worker %d READ time %.5f msecs, speed = %.5fB/msec.",
+		logit(fmt.Sprintf("Worker %d READ time %.5f msecs, speed = %.5f B/msec.",
 		worker_id, read_time, bps), "efs_benchmark_"+job_id+".log")
 	}
 
 	// Run the read from same file case
 	if(operation == "rsf") {
 		starttime = time.Now()
-		logit(fmt.Sprintf("Worker_%d READ SAME FILE START TIME: %+v", worker_id, starttime), "efs_benchmark_"+job_id+".log")
+		logit(fmt.Sprintf("Worker_%d RSF_START_TIME %+v", worker_id, starttime), "efs_benchmark_"+job_id+".log")
 		runReadSameFile(worker_id)
 		
 		read_same_file_time = float64(read_same_file_finish.Sub(starttime).Milliseconds())
 
 		bps = float64(object_size) / read_same_file_time
-		logit(fmt.Sprintf("Worker %d READ SAME FILE time %.5f msecs, speed = %.5fB/msec.",
+		logit(fmt.Sprintf("Worker_%d RSF time %.5f msecs, speed = %.5f B/msec.",
 		worker_id, read_same_file_time, bps), "efs_benchmark_"+job_id+".log")
 	}
 
 	// Run the delete case
 	if(operation == "d") {
 		starttime := time.Now()
-		logit(fmt.Sprintf("Worker_%d DELETE START TIME: %+v", worker_id, starttime), "efs_benchmark_"+job_id+".log")
+		logit(fmt.Sprintf("Worker_%d DELETE_START_TIME %+v", worker_id, starttime), "efs_benchmark_"+job_id+".log")
 		runDelete(worker_id)
 		
 		delete_time = float64(delete_finish.Sub(starttime).Milliseconds())
 		
 		bps := float64(object_size) / delete_time
-		logit(fmt.Sprintf("Worker %d DELETE time %.5f msecs, speed = %.5fB/msec.",
+		logit(fmt.Sprintf("Worker_%d DELETE time %.5f msecs, speed = %.5f B/msec.",
 		worker_id, delete_time, bps), "efs_benchmark_"+job_id+".log")
 	}
 }
@@ -136,7 +136,7 @@ func runWrite(worker_id int) {
 
 		defer func() {
 			write_finish = time.Now()
-			logit(fmt.Sprintf("Worker_%d WRITE END TIME: %+v", worker_id, write_finish), "efs_benchmark_"+job_id+".log")
+			logit(fmt.Sprintf("Worker_%d WRITE_END_TIME %+v", worker_id, write_finish), "efs_benchmark_"+job_id+".log")
 		}()
 
 	}()
@@ -159,7 +159,7 @@ func runRead(worker_id int) {
 
 		defer func() {
 			read_finish = time.Now()
-			logit(fmt.Sprintf("Worker_%d READ END TIME: %+v", worker_id, read_finish), "efs_benchmark_"+job_id+".log")
+			logit(fmt.Sprintf("Worker_%d READ_END_TIME %+v", worker_id, read_finish), "efs_benchmark_"+job_id+".log")
 		}()
 	}()
 }
@@ -181,7 +181,7 @@ func runReadSameFile(worker_id int) {
 
 		defer func() {
 			read_same_file_finish = time.Now()
-			logit(fmt.Sprintf("Worker_%d READ SAME FILE END TIME: %+v", worker_id, read_same_file_finish), "efs_benchmark_"+job_id+".log")
+			logit(fmt.Sprintf("Worker_%d RSF_END_TIME %+v", worker_id, read_same_file_finish), "efs_benchmark_"+job_id+".log")
 		}()
 	}()
 }
@@ -195,7 +195,7 @@ func runDelete(worker_id int) {
 
 	defer func() {
 		delete_finish = time.Now()
-		logit(fmt.Sprintf("Worker_%d DELETE END TIME: %+v", worker_id, delete_finish), "efs_benchmark_"+job_id+".log")
+		logit(fmt.Sprintf("Worker_%d DELETE_END_TIME %+v", worker_id, delete_finish), "efs_benchmark_"+job_id+".log")
 	}()
 }
 
@@ -203,7 +203,7 @@ func logit(msg string, fileName string) {
 	fmt.Println(msg)
 	logfile, _ := os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
 	if logfile != nil {
-		logfile.WriteString(time.Now().Format("Mon 2006-01-2 17:06:04.000000") + ": " + msg + "\n")
+		logfile.WriteString(job_id + " " + time.Now().Format("Mon 2006-01-2 17:06:04.000000") + ": " + msg + "\n")
 		logfile.Close()
 	}
 }
