@@ -10,7 +10,7 @@ import (
 	"time"
 	"strconv"
     "math/rand"
-	"bufio"
+	"io"
 )
 
 var cs *corcache.RedisBackedCache
@@ -195,19 +195,21 @@ func runRead(worker_id int) {
 	if err != nil {
 		log.Errorf("failed to open reader, %+v", err)
 	}
-	defer reader.Close()
 
+	buffer, err := io.ReadAll(reader)
+	if err != nil {
+		log.Errorf("failed to read file, %+v", err)
+	}
+	log.Infof("Worker_%d READ_TEXT_LENGTH %d", worker_id, len(buffer))
+
+		
 	defer func() {
-		scanner := bufio.NewScanner(reader)
-
-		for scanner.Scan() {
-			log.Infof("Text length %d", len(scanner.Text()))
+		err = reader.Close()
+		if err != nil {
+			log.Errorf("failed to close reader, %+v", err)
 		}
-
-		defer func() {
-			read_finish = time.Now()
-			log.Infof("%s Worker_%d READ_END_TIME %+v", job_id, worker_id, read_finish)
-		}()
+		read_finish = time.Now()
+		log.Infof("%s Worker_%d READ_END_TIME %+v", job_id, worker_id, read_finish)
 	}()
 }
 
@@ -217,19 +219,21 @@ func runReadSameFile(worker_id int) {
 	if err != nil {
 		log.Errorf("failed to open reader, %+v", err)
 	}
-	defer reader.Close()
 
+	buffer, err := io.ReadAll(reader)
+	if err != nil {
+		log.Errorf("failed to read file, %+v", err)
+	}
+	log.Infof("Worker_%d READ_TEXT_LENGTH %d", worker_id, len(buffer))
+
+		
 	defer func() {
-		scanner := bufio.NewScanner(reader)
-
-		for scanner.Scan() {
-			log.Infof("Text length %d", len(scanner.Text()))
+		err = reader.Close()
+		if err != nil {
+			log.Errorf("failed to close reader, %+v", err)
 		}
-
-		defer func() {
-			read_same_file_finish = time.Now()
-			log.Infof("%s Worker_%d RSF_END_TIME %+v", job_id, worker_id, read_same_file_finish)
-		}()
+		read_same_file_finish = time.Now()
+		log.Infof("%s Worker_%d RSF_END_TIME %+v", job_id, worker_id, read_same_file_finish)
 	}()
 }
 

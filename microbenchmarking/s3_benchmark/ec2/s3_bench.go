@@ -10,7 +10,7 @@ import (
 	"os"
 	"strconv"
     "math/rand"
-	"bufio"
+	"io"
 )
 
 var cs corfs.FileSystem
@@ -151,19 +151,21 @@ func runRead(worker_id int) {
 	if err != nil {
 		log.Errorf("failed to open reader, %+v", err)
 	}
-	defer reader.Close()
 
-	defer func() {
-		scanner := bufio.NewScanner(reader)
+	buffer, err := io.ReadAll(reader)
+	if err != nil {
+		log.Errorf("failed to read file, %+v", err)
+	}
+	logit(fmt.Sprintf("Worker_%d READ_TEXT_LENGTH %d", worker_id, len(buffer)), "s3_benchmark_"+job_id+".log")
 
-		for scanner.Scan() {
-			log.Infof("Text length %d", len(scanner.Text()))
-		}
 		
-		defer func() {
-			read_finish = time.Now()
-			logit(fmt.Sprintf("Worker_%d READ_END_TIME %+v", worker_id, read_finish), "s3_benchmark_"+job_id+".log")
-		}()
+	defer func() {
+		err = reader.Close()
+		if err != nil {
+			log.Errorf("failed to close reader, %+v", err)
+		}
+		read_finish = time.Now()
+		logit(fmt.Sprintf("Worker_%d READ_END_TIME %+v", worker_id, read_finish), "s3_benchmark_"+job_id+".log")
 	}()
 }
 
@@ -173,19 +175,21 @@ func runReadSameFile(worker_id int) {
 	if err != nil {
 		log.Errorf("failed to open reader, %+v", err)
 	}
-	defer reader.Close()
 
+	buffer, err := io.ReadAll(reader)
+	if err != nil {
+		log.Errorf("failed to read file, %+v", err)
+	}
+	logit(fmt.Sprintf("Worker_%d READ_TEXT_LENGTH %d", worker_id, len(buffer)), "s3_benchmark_"+job_id+".log")
+
+		
 	defer func() {
-		scanner := bufio.NewScanner(reader)
-
-		for scanner.Scan() {
-			log.Infof("Text length %d", len(scanner.Text()))
+		err = reader.Close()
+		if err != nil {
+			log.Errorf("failed to close reader, %+v", err)
 		}
-
-		defer func() {
-			read_same_file_finish = time.Now()
-			logit(fmt.Sprintf("Worker_%d RSF_END_TIME %+v", worker_id, read_same_file_finish), "s3_benchmark_"+job_id+".log")
-		}()
+		read_same_file_finish = time.Now()
+		logit(fmt.Sprintf("Worker_%d RSF_END_TIME %+v", worker_id, read_same_file_finish), "s3_benchmark_"+job_id+".log")
 	}()
 }
 
