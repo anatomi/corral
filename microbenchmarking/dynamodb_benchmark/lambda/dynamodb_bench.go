@@ -9,6 +9,7 @@ import (
 	"time"
 	"strconv"
     "math/rand"
+	"bufio"
 )
 
 var cs *corcache.DynamoCache
@@ -48,11 +49,6 @@ type Response struct {
 
 func HandleLambdaEvent(event Event) (Response, error) {
 	fmt.Println("---------- DynamoDB benchmarking ----------")
-	if invokeCount == 0 {
-		fmt.Println("~~~~~~~~ COLD START ~~~~~~~~")
-	} else {
-		fmt.Println("~~~~~~~~ WARM START ~~~~~~~~")
-	}
 	
 	invokeCount = invokeCount + 1
 	bps = 0
@@ -106,6 +102,12 @@ func HandleLambdaEvent(event Event) (Response, error) {
 		} else {
 			log.Fatal("Invalid operation")
 		}
+	}
+
+	if invokeCount == 0 {
+		log.Infof("%s Worker_%d ~~~~~~~~ COLD START ~~~~~~~~", job_id, worker_id)
+	} else {
+		log.Infof("%s Worker_%d ~~~~~~~~ WARM START ~~~~~~~~", job_id, worker_id)
 	}
 	
 	cs, err = corcache.NewDynamoCache()
@@ -219,13 +221,13 @@ func runRead(worker_id int) {
 	if err != nil {
 		log.Errorf("failed to open reader, %+v", err)
 	}
-	var dataRead []byte
-	_, err = reader.Read(dataRead)
+	defer reader.Close()
 
 	defer func() {
-		err = reader.Close()
-		if err != nil{
-			log.Errorf("Failed to close reader: %#v", err)
+		scanner := bufio.NewScanner(reader)
+
+		for scanner.Scan() {
+			log.Infof("Text length %d", len(scanner.Text()))
 		}
 
 		defer func() {
@@ -241,13 +243,13 @@ func runReadSameFile(worker_id int) {
 	if err != nil {
 		log.Errorf("failed to open reader, %+v", err)
 	}
-	var dataRead []byte
-	_, err = reader.Read(dataRead)
-	
+	defer reader.Close()
+
 	defer func() {
-		err = reader.Close()
-		if err != nil{
-			log.Errorf("Failed to close reader: %#v", err)
+		scanner := bufio.NewScanner(reader)
+
+		for scanner.Scan() {
+			log.Infof("Text length %d", len(scanner.Text()))
 		}
 
 		defer func() {

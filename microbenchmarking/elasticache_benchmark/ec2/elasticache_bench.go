@@ -11,6 +11,7 @@ import (
 	"os"
 	"strconv"
     "math/rand"
+	"bufio"
 )
 
 var cs *corcache.RedisBackedCache
@@ -157,15 +158,15 @@ func runRead(worker_id int) {
 	if err != nil {
 		log.Errorf("failed to open reader, %+v", err)
 	}
-	var dataRead []byte
-	_, err = reader.Read(dataRead)
+	defer reader.Close()
 
 	defer func() {
-		err = reader.Close()
-		if err != nil{
-			log.Errorf("Failed to close reader: %#v", err)
-		}
+		scanner := bufio.NewScanner(reader)
 
+		for scanner.Scan() {
+			log.Infof("Text length %d", len(scanner.Text()))
+		}
+		
 		defer func() {
 			read_finish = time.Now()
 			logit(fmt.Sprintf("Worker_%d READ_END_TIME %+v", worker_id, read_finish), "elasticache_benchmark_"+job_id+".log")
@@ -179,13 +180,13 @@ func runReadSameFile(worker_id int) {
 	if err != nil {
 		log.Errorf("failed to open reader, %+v", err)
 	}
-	var dataRead []byte
-	_, err = reader.Read(dataRead)
-	
+	defer reader.Close()
+
 	defer func() {
-		err = reader.Close()
-		if err != nil{
-			log.Errorf("Failed to close reader: %#v", err)
+		scanner := bufio.NewScanner(reader)
+
+		for scanner.Scan() {
+			log.Infof("Text length %d", len(scanner.Text()))
 		}
 
 		defer func() {
