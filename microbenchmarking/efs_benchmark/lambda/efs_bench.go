@@ -46,8 +46,6 @@ type Response struct {
 
 func HandleLambdaEvent(event Event) (Response, error) {
 	fmt.Println("---------- EFS benchmarking ----------")
-
-	invokeCount = invokeCount + 1
 	bps = 0
 	
 	if event.FilesystemPath == "" {
@@ -87,7 +85,7 @@ func HandleLambdaEvent(event Event) (Response, error) {
 	} else {
 		log.Infof("%s Worker_%d ~~~~~~~~ WARM START ~~~~~~~~", job_id, worker_id)
 	}
-
+	invokeCount = invokeCount + 1
 	
 	cs, err = corcache.NewEFSCache()
 	if err != nil {

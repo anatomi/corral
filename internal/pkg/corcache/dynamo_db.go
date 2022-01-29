@@ -415,6 +415,7 @@ func (D *DynamoCache) InitDynamoTable(config *DynamoConfig) error {
 		if aerr.Code() == dynamodb.ErrCodeResourceNotFoundException {
 			// create new Table
 			createTableInput := &dynamodb.CreateTableInput{
+				BillingMode: aws.String("PAY_PER_REQUEST"),
 				AttributeDefinitions: []*dynamodb.AttributeDefinition{
 					{
 						AttributeName: aws.String(config.TablePartitionKey),
@@ -434,10 +435,6 @@ func (D *DynamoCache) InitDynamoTable(config *DynamoConfig) error {
 						AttributeName: aws.String(config.TableSortKey),
 						KeyType:       aws.String("RANGE"),
 					},
-				},
-				ProvisionedThroughput: &dynamodb.ProvisionedThroughput{
-					ReadCapacityUnits:  aws.Int64(20),
-					WriteCapacityUnits: aws.Int64(20),
 				},
 				TableName: aws.String(config.TableName),
 			}

@@ -48,8 +48,6 @@ type Response struct {
 
 func HandleLambdaEvent(event Event) (Response, error) {
 	fmt.Println("---------- ElastiCache benchmarking ----------")
-	
-	invokeCount = invokeCount + 1
 	bps = 0
 
 	if event.RedisAddress == "" {
@@ -89,6 +87,7 @@ func HandleLambdaEvent(event Event) (Response, error) {
 	} else {
 		log.Infof("%s Worker_%d ~~~~~~~~ WARM START ~~~~~~~~", job_id, worker_id)
 	}
+	invokeCount = invokeCount + 1
 
 	cs,err = corcache.NewRedisBackedCache(corcache.DeploymentType(2))
 	if err != nil {

@@ -49,8 +49,6 @@ type Response struct {
 
 func HandleLambdaEvent(event Event) (Response, error) {
 	fmt.Println("---------- DynamoDB benchmarking ----------")
-	
-	invokeCount = invokeCount + 1
 	bps = 0
 
 	if event.TableName == "" {
@@ -109,6 +107,7 @@ func HandleLambdaEvent(event Event) (Response, error) {
 	} else {
 		log.Infof("%s Worker_%d ~~~~~~~~ WARM START ~~~~~~~~", job_id, worker_id)
 	}
+	invokeCount = invokeCount + 1
 	
 	cs, err = corcache.NewDynamoCache()
 	if err != nil {

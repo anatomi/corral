@@ -45,8 +45,6 @@ type Response struct {
 
 func HandleLambdaEvent(event Event) (Response, error) {
 	fmt.Println("---------- S3 benchmarking ----------")
-	
-	invokeCount = invokeCount + 1
 	bps = 0
 
 	if event.BucketName == "" {
@@ -86,6 +84,7 @@ func HandleLambdaEvent(event Event) (Response, error) {
 	} else {
 		log.Infof("%s Worker_%d ~~~~~~~~ WARM START ~~~~~~~~", job_id, worker_id)
 	}
+	invokeCount = invokeCount + 1
 
 	// Creates and initializes new S3 "filesystem"
 	cs, err = corfs.InitFilesystem(1)

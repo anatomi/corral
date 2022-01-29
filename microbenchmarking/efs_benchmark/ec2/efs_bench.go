@@ -86,7 +86,7 @@ func main() {
 		read_time := float64(read_finish.Sub(starttime).Milliseconds())
 
 		bps = float64(object_size) / read_time
-		logit(fmt.Sprintf("Worker %d READ time %.5f msecs, speed = %.5f B/msec.",
+		logit(fmt.Sprintf("Worker_%d READ time %.5f msecs, speed = %.5f B/msec.",
 		worker_id, read_time, bps), "efs_benchmark_"+job_id+".log")
 	}
 
