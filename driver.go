@@ -194,6 +194,18 @@ func WithRedisBackedCache() Option {
 	}
 }
 
+func WithEFSBackedCache() Option {
+	return func(c *config) {
+		c.Cache = corcache.EFS
+	}
+}
+
+func WithDynamoDBBackedCache() Option {
+	return func(c *config) {
+		c.Cache = corcache.Dynamodb
+	}
+}
+
 func (d *Driver) GetFinalOutputs() []string {
 	return d.lastOutputs
 }
