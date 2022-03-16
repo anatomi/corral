@@ -28,9 +28,8 @@ func setupDefaults() {
 		"lambdaTimeout":      180,
 		"lambdaManageRole":   true,
 		"lambdaS3Key":        "corral_code.zip",
-		"lambdaS3Bucket":     "corral-code-bucket",
-		"lambdaEfsPath":	  "/mnt/cache", // path must always start with "/mnt/"
-		"cleanup":            true,
+		"lambdaS3Bucket":     "corral-code-bucket1",
+		"cleanup":            false,
 		"durable":            false, //Should Intermeidiate data be flushed to the filesystem (in conflict with cleanup)
 		"verbose":            false,
 		"splitSize":          100 * 1024 * 1024, // Default input split size is 100Mb
@@ -59,6 +58,7 @@ func setupDefaults() {
 		"efsFilesystemName": "corral_efs_filesystem",
 		"efsAccessPointName": "corral_efs_accesspoint",
 		"efsAccessPointPath": "/cache",
+		"lambdaEfsPath": "/mnt/cache",
 
 		// AWS VPC config
 		"efsVPCSubnetIds": "", // List of subnet ids associated with VPC separated by ';'"
@@ -66,8 +66,6 @@ func setupDefaults() {
 	
 		// DynamoDB config
 		"dynamodbTableName": "CorralCache",
-		"dynamodbRCP": 20,
-		"dynamodbWCP": 20,
 
 	}
 	for key, value := range defaultSettings {

@@ -348,6 +348,7 @@ func (A *AWSEFSCache) InitEfsFilesystem(config *AWSEfsConfig) error {
 			CreationToken:   aws.String(randomToken(10)),
 			Encrypted:       aws.Bool(true),
 			PerformanceMode: aws.String("generalPurpose"),
+			ThroughputMode: aws.String("bursting"),
 			Tags: []*efs.Tag{
 				{
 					Key:   aws.String("Name"),
