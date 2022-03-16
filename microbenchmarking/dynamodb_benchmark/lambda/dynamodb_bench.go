@@ -132,33 +132,33 @@ func HandleLambdaEvent(event Event) (Response, error) {
 		// Generate random byte array
 		object_data = RandBytesRmndr(object_size)
 		starttime = time.Now()
-		log.Infof("%s Worker_%d WRITE_START_TIME %+v", job_id, worker_id, starttime)
+		log.Infof("Invoke_%d %s Worker_%d WRITE_START_TIME %+v", invokeCount, job_id, worker_id, starttime)
 		runWrite(worker_id)
 
 		write_time = float64(write_finish.Sub(starttime).Milliseconds())
 		
 		bps = float64(object_size) / write_time
-		log.Infof("%s Worker_%d WRITE time %.5f msecs, speed = %.5f B/msec",
-		job_id, worker_id, write_time, bps)
+		log.Infof("Invoke_%d %s Worker_%d WRITE time %.5f msecs, speed = %.5f B/msec",
+		invokeCount, job_id, worker_id, write_time, bps)
 	}
 	
 	// Run the read case
 	if(operation == "r") {
 		starttime = time.Now()
-		log.Infof("%s Worker_%d READ_START_TIME %+v", job_id, worker_id, starttime)
+		log.Infof("Invoke_%d %s Worker_%d READ_START_TIME %+v", invokeCount, job_id, worker_id, starttime)
 		runRead(worker_id)
 		
 		read_time = float64(read_finish.Sub(starttime).Milliseconds())
 
 		bps = float64(object_size) / read_time
-		log.Infof("%s Worker_%d READ time %.5f msecs, speed = %.5f B/msec.",
-		job_id, worker_id, read_time, bps)
+		log.Infof("Invoke_%d %s Worker_%d READ time %.5f msecs, speed = %.5f B/msec.",
+		invokeCount, job_id, worker_id, read_time, bps)
 	}
 
 	// Run the read from same file case
 	if(operation == "rsf") {
 		starttime = time.Now()
-		log.Infof("%s Worker_%d RSF_START_TIME %+v", job_id, worker_id, starttime)
+		log.Infof("Invoke_%d %s Worker_%d RSF_START_TIME %+v", invok job_id, worker_id, starttime)
 		runReadSameFile(worker_id)
 		
 		read_same_file_time = float64(read_same_file_finish.Sub(starttime).Milliseconds())

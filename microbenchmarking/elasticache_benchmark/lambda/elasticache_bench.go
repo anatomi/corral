@@ -97,6 +97,10 @@ func HandleLambdaEvent(event Event) (Response, error) {
 	// Init client
 	cs.Client = redis.NewUniversalClient(&redis.UniversalOptions{
 		Addrs: []string{redis_addrs}, // as flag
+		DialTimeout: 60 * time.Second,
+		ReadTimeout: 60 * time.Second,
+		WriteTimeout: 60 * time.Second,
+		IdleTimeout: 60 * time.Second,
 	})
 
 	log.Infof("------------------- Job: %s -------------------", job_id)

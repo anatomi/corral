@@ -66,6 +66,10 @@ func main() {
 	// Init client
 	cs.Client = redis.NewUniversalClient(&redis.UniversalOptions{
 		Addrs: []string{redis_addrs}, // as flag
+		DialTimeout: 60 * time.Second,
+		ReadTimeout: 60 * time.Second,
+		WriteTimeout: 60 * time.Second,
+		IdleTimeout: 60 * time.Second,
 		//RouteByLatency: rc.RouteByLatency, // as flag
 		//RouteRandomly:  rc.RouteRandomly, // as flag
 	})
