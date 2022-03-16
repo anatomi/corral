@@ -28,8 +28,6 @@ type DynamoConfig struct {
 	TablePartitionKey			string
 	TableSortKey				string
 	ValueAttribute				string
-	ReadCapacityUnits			int64
-	WriteCapacityUnits			int64
 }
 
 type DynamoCache struct {
@@ -99,8 +97,6 @@ func (D *DynamoCache) Deploy() error {
 	conf.TablePartitionKey = TablePartitionKey
 	conf.TableSortKey = TableSortKey
 	conf.ValueAttribute = ValueAttribute
-	conf.ReadCapacityUnits = viper.GetInt64("dynamodbRCP")
-	conf.WriteCapacityUnits = viper.GetInt64("dynamodbWCP")
 
 	D.Config = &conf
 
@@ -415,7 +411,7 @@ func (D *DynamoCache) InitDynamoTable(config *DynamoConfig) error {
 		if aerr.Code() == dynamodb.ErrCodeResourceNotFoundException {
 			// create new Table
 			createTableInput := &dynamodb.CreateTableInput{
-				BillingMode: aws.String("PAY_PER_REQUEST"),
+				BillingMode: aws.String(dynamodb.BillingModePayPerRequest),
 				AttributeDefinitions: []*dynamodb.AttributeDefinition{
 					{
 						AttributeName: aws.String(config.TablePartitionKey),
