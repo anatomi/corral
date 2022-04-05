@@ -168,6 +168,52 @@ func (A *AWSEFSCache) Undeploy() error {
 	// EFS efsiface does not have any methods to close EFS clients or delete filesystem, mount targets or access points
 	// You can't delete a file system that is in use. That is, if the file system has any mount targets, 
 	// you must first delete them. For more information, see DescribeMountTargets and DeleteMountTarget.
+	// Deleting mount targets 
+	mountTargetsCount := len(A.MountTargets)
+	for _, mountTarget := range A.MountTargets {
+		deleteMountTargetInput := &efs.DeleteMountTargetInput{
+			MountTargetId: aws.String(*mountTarget.MountTargetId),
+		}
+		
+		_, err := A.Client.DeleteMountTarget(deleteMountTargetInput)
+		if err != nil {
+			return err
+		}
+	}
+	log.Infof("Waiting for mount targets to be deleted")        
+
+
+	interval := setInterval(func() {
+		describeInput := &efs.DescribeMountTargetsInput{
+			FileSystemId: aws.String(*A.FileSystem.FileSystemId),
+		}
+		result, err := A.Client.DescribeMountTargets(describeInput)
+		if err != nil {
+			panic(err)
+		}
+
+		if len(result.MountTargets) == 0 {
+			mountTargetsCount = len(result.MountTargets)
+		}
+	}, 10000, false)
+
+	for {
+		if mountTargetsCount == 0 {
+			log.Infof("Mount targets deleted")
+			deleteFileSystemInput := &efs.DeleteFileSystemInput{
+				FileSystemId: aws.String(*A.FileSystem.FileSystemId),
+			}
+
+			log.Infof("Deleting file system")
+			_, err := A.Client.DeleteFileSystem(deleteFileSystemInput)
+			if err != nil {
+				panic(err)
+			}
+			interval <- true
+			return nil
+		}
+	}
+	
 	return nil
 }
 
@@ -325,7 +371,7 @@ func (A *AWSEFSCache) NewEfsClient() error {
 	os.Setenv("AWS_SDK_LOAD_CONFIG", "true")
 	sess := session.Must(session.NewSession())
 	A.Client = efs.New(sess)
-	fmt.Println("EFS client initialised")
+	log.Info("EFS client initialised")
 
 	return nil
 }
