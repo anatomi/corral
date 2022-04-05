@@ -29,7 +29,7 @@ func setupDefaults() {
 		"lambdaManageRole":   true,
 		"lambdaS3Key":        "corral_code.zip",
 		"lambdaS3Bucket":     "corral-code-bucket1",
-		"cleanup":            false,
+		"cleanup":            true,
 		"durable":            false, //Should Intermeidiate data be flushed to the filesystem (in conflict with cleanup)
 		"verbose":            false,
 		"splitSize":          100 * 1024 * 1024, // Default input split size is 100Mb
@@ -47,7 +47,9 @@ func setupDefaults() {
 
 		"redisDeploymentType":    	2,  //corosponse to corcache.Redisx
 		"redisPort":              	nil,
-		"redisClusterSize":			3,
+		"redisNodeGroups":			1, // how many shards (cluster mode enabled) => 1 for cluster mode disabled
+		"redisReplicasPerNodeGroup": nil, // how many replicas per shard (cluster mode enabled)
+		"redisNumCacheClusters":	3, // how many clusters (cluster mode disabled) => max. 1 primary + 5 replicas
 		"kubernetesNamespace":    	"", //
 		"kubernetesStorageClass": 	"",
 		"elasticacheNodeType":    	"cache.t2.micro",

@@ -48,7 +48,23 @@ func NewDeploymentStrategy(deploymentType DeploymentType) (DeploymentStrategy,er
 			ecrds := &ElasticacheRedisDeploymentStrategy{
 				NodeType:      	viper.GetString("elasticacheNodeType"),
 				EngineVersion:  viper.GetString("elasticacheEngineVersion"),
-				NumCacheNodes: 	viper.GetInt64("redisClusterSize"),
+				NumNodeGroups:  viper.GetInt64("redisNodeGroups"),
+			}
+
+			if ecrds.NumNodeGroups > 1 {
+				if viper.IsSet("redisReplicasPerNodeGroup") {
+					replicationGroups := viper.GetInt64("redisReplicasPerNodeGroup")
+					ecrds.ReplicasPerNodeGroup  = replicationGroups
+				} else {
+					panic("redisReplicasPerNodeGroup is not defined in config")
+				}
+			} else {
+				if viper.IsSet("redisNumCacheClusters") {
+					numClusters := viper.GetInt64("redisNumCacheClusters")
+					ecrds.NumCacheClusters  = numClusters
+				} else {
+					panic("redisNumCacheClusters is not defined in config")
+				}
 			}
 
 			if viper.IsSet("redisPort") {
@@ -318,7 +334,7 @@ func (r *RedisBackedCache) Delete(filePath string) error {
 }
 
 func (r *RedisBackedCache) Join(elem ...string) string {
-	return strings.Join(elem,"")
+	return strings.Join(elem,"/")
 }
 
 func (r *RedisBackedCache) Split(path string) []string {

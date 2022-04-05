@@ -13,13 +13,15 @@ import (
 	"strings"
 )
 
-const ElasticacheClusterName = "corral-redis-cluster-disabled"
+const ElasticacheClusterName = "corral-redis-cluster"
 const ElasticacheClusterSubnetGroupName = "corral-cluster-subnet-group"
 
 type ElasticacheRedisDeploymentStrategy struct {
 	NodeType string
 	NodePort *int64 
-	NumCacheNodes int64
+	NumCacheClusters int64
+	NumNodeGroups int64
+	ReplicasPerNodeGroup int64
 	EngineVersion string
 
 	Client elasticacheiface.ElastiCacheAPI
@@ -35,7 +37,9 @@ type elasticacheRedisConfig struct {
 		Name 			string
 		NodeType 		string
 		NodePort 		*int64
-		NumCacheNodes	int64
+		NumCacheClusters	int64
+		NumNodeGroups int64
+		ReplicasPerNodeGroup int64
 		EngineVersion 	string
 		SecurityGroupIds []string
 	}
@@ -46,7 +50,9 @@ func (ec *ElasticacheRedisDeploymentStrategy) config() (elasticacheRedisConfig, 
 
 	conf.Cluster.Name = ElasticacheClusterName
 	conf.Cluster.NodeType = ec.NodeType
-	conf.Cluster.NumCacheNodes = ec.NumCacheNodes
+	conf.Cluster.NumNodeGroups = ec.NumNodeGroups
+	conf.Cluster.NumCacheClusters = ec.NumCacheClusters
+	conf.Cluster.ReplicasPerNodeGroup = ec.ReplicasPerNodeGroup
 	
 	if ec.NodePort == nil {
 		defaultPort := int64(6379)
@@ -213,12 +219,16 @@ func (ec *ElasticacheRedisDeploymentStrategy) createReplicationGroup(config *ela
 		SecurityGroupIds:				aws.StringSlice(config.Cluster.SecurityGroupIds),
 		Engine:                    		aws.String("redis"),
 		EngineVersion:             		aws.String(config.Cluster.EngineVersion),
-		Port:                      		aws.Int64(*config.Cluster.NodePort),
-		NumCacheClusters:            	aws.Int64(config.Cluster.NumCacheNodes), // # replication nodes (max. 5) => ReplicasPerNodeGroup 
-		//ReplicasPerNodeGroup:			aws.Int64(config.Cluster.NumCacheNodes),
-		NumNodeGroups:					aws.Int64(1), // for cluster mode enabled => 1 shard
+		Port:                      		aws.Int64(*config.Cluster.NodePort),	
+		NumNodeGroups:					aws.Int64(config.Cluster.NumNodeGroups), // for cluster mode disabled => 1 shard
 		ReplicationGroupDescription:	aws.String("A Corral-Redis replication group."),
 		ReplicationGroupId:          	aws.String(config.Cluster.Name),
+	}
+
+	if config.Cluster.NumNodeGroups > 1 {
+		inputCreateReplicationGroup.ReplicasPerNodeGroup = aws.Int64(config.Cluster.ReplicasPerNodeGroup)
+	} else {
+		inputCreateReplicationGroup.NumCacheClusters = aws.Int64(config.Cluster.NumCacheClusters)
 	}
 
 	result, err := ec.Client.CreateReplicationGroup(inputCreateReplicationGroup)
@@ -274,8 +284,8 @@ func needsUpdate(cluster elasticache.ReplicationGroup, config elasticache.Create
 	log.Infof("Type: %s", *config.CacheNodeType)
 
 	// scale up or down node type
-	//log.Infof("#Nodes: %d", *cluster.NumCacheNodes)
-	//log.Infof("#Nodes: %d", *config.NumCacheNodes)
+	//log.Infof("#Nodes: %d", *cluster.NumCacheClusters)
+	//log.Infof("#Nodes: %d", *config.NumCacheClusters)
 
 	// NOT recomanded to change cluster's engine version => only upgrade possible
 	//log.Infof("Engine %s", *cluster.EngineVersion)
