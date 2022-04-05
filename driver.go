@@ -507,9 +507,12 @@ func (d *Driver) Main() {
 }
 
 func (d *Driver) Execute() {
+	log.Info("Ana's version")
 	start := time.Now()
+	fmt.Printf("Job Start Time: %s\n", start)
 	d.run()
 	end := time.Now()
+	fmt.Printf("Job End Time: %s\n", end)
 	fmt.Printf("Job Execution Time: %s\n", end.Sub(start))
 	d.Runtime = end.Sub(start)
 }
