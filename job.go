@@ -60,9 +60,11 @@ func (j *Job) collectActivation(result taskResult) {
 
 // Logic for running a single map task
 func (j *Job) runMapper(mapperID uint, splits []inputSplit) error {
+	log.Infof("RUNNING MAPPER %d", mapperID)
 	//check if we can use a cacheFS instead
 	var fs corfs.FileSystem = j.fileSystem
 	var outputPath = j.outputPath
+	var subPaths = strings.Split(j.outputPath, "/")
 	if j.cacheSystem != nil {
 	
 		fs = j.cacheSystem
@@ -70,10 +72,10 @@ func (j *Job) runMapper(mapperID uint, splits []inputSplit) error {
 
 		// check if cache System is EFS -> if YES: configure j.outputPath to be "lambdaEfsPath"
 		if corcache.CacheSystemTypes(fs) == corcache.EFS {
-			outputPath = viper.GetString("lambdaEfsPath")
+			outputPath = fs.Join(viper.GetString("lambdaEfsPath"), subPaths[len(subPaths)-1])
 		}
 		if corcache.CacheSystemTypes(fs) == corcache.Redis || corcache.CacheSystemTypes(fs) == corcache.Dynamodb {
-			outputPath = ""
+			outputPath = subPaths[len(subPaths)-1]
 		}
 	}
 	log.Infof("Job location %s", outputPath)
@@ -117,9 +119,10 @@ func (j *Job) runMapperSplit(split inputSplit, emitter Emitter) error {
 
 	inputSource, err := j.fileSystem.OpenReader(split.Filename, split.StartOffset)
 	if err != nil {
+		log.Errorf("Error %v", err)
 		return err
 	}
-	log.Debugf("Input source: %#v", inputSource)
+	log.Infof("Input source: %#v", inputSource)
 
 	scanner := bufio.NewScanner(inputSource)
 	var bytesRead int64
@@ -153,17 +156,19 @@ func (j *Job) runMapperSplit(split inputSplit, emitter Emitter) error {
 
 // Logic for running a single reduce task
 func (j *Job) runReducer(binID uint) error {
+	log.Infof("RUNNING REDUCER %d", binID)
 	//check if we can use a cacheFS instead
 	var fs corfs.FileSystem = j.fileSystem
 	var outputPath = j.outputPath
+	var subPaths = strings.Split(j.outputPath, "/")
 	if j.cacheSystem != nil {
 		fs = j.cacheSystem
 		if corcache.CacheSystemTypes(fs) == corcache.EFS {
-			outputPath = viper.GetString("lambdaEfsPath")
+			outputPath = fs.Join(viper.GetString("lambdaEfsPath"), subPaths[len(subPaths)-1])
 		}
 
 		if corcache.CacheSystemTypes(fs) == corcache.Redis || corcache.CacheSystemTypes(fs) == corcache.Dynamodb {
-			outputPath = ""
+			outputPath = subPaths[len(subPaths)-1]
 		}
 	}
 
@@ -246,6 +251,7 @@ func (j *Job) runReducer(binID uint) error {
 
 	if !j.config.Cleanup {
 		if j.cacheSystem != nil {
+			log.Info("Flushing intermediate data to S3")
 			err := j.cacheSystem.Flush(j.fileSystem, j.outputPath)
 
 			if err != nil {
@@ -258,7 +264,7 @@ func (j *Job) runReducer(binID uint) error {
 
 	atomic.AddInt64(&j.bytesWritten, emitter.bytesWritten())
 	atomic.AddInt64(&j.bytesRead, bytesRead)
-
+	// return emitter.close() ?????
 	return nil
 }
 

@@ -486,6 +486,7 @@ func (d *Driver) Main() {
 		if err != nil {
 			log.Infof("undeploy failed with %+v", err)
 		}
+		fmt.Print("Job End Time AFTER UNDEPLOY")
 		return
 	}
 

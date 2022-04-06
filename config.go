@@ -29,7 +29,7 @@ func setupDefaults() {
 		"lambdaManageRole":   true,
 		"lambdaS3Key":        "corral_code.zip",
 		"lambdaS3Bucket":     "corral-code-bucket1",
-		"cleanup":            true,
+		"cleanup":            false,
 		"durable":            false, //Should Intermeidiate data be flushed to the filesystem (in conflict with cleanup)
 		"verbose":            false,
 		"splitSize":          100 * 1024 * 1024, // Default input split size is 100Mb
