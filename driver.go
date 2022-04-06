@@ -188,6 +188,12 @@ func WithLocalMemoryCache() Option {
 	}
 }
 
+func WithNoCache() Option {
+	return func(c *config) {
+		c.Cache = corcache.NoCache
+	}
+}
+
 func WithRedisBackedCache() Option {
 	return func(c *config) {
 		c.Cache = corcache.Redis

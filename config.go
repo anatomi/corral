@@ -41,7 +41,7 @@ func setupDefaults() {
 		"remoteLoggingHost":  "",
 		"logName":            "activations",
 
-		"cache": 4, //coresponse to corcache.CacheSystemType (0 - NoCache, 1 - Local, 2 - Redis, 3 - Olric, 4 - EFS, 5 - DynamoDB)
+		"cache": 0, //coresponse to corcache.CacheSystemType (0 - NoCache, 1 - Local, 2 - Redis, 3 - Olric, 4 - EFS, 5 - DynamoDB)
 
 		"cacheSize": uint64(10 * 1024 * 1024), //corosponse to corcache.Local
 
