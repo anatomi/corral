@@ -486,7 +486,8 @@ func (d *Driver) Main() {
 		if err != nil {
 			log.Infof("undeploy failed with %+v", err)
 		}
-		fmt.Print("Job End Time AFTER UNDEPLOY")
+		end := time.Now()
+		fmt.Printf("Job End Time AFTER UNDEPLOY: %s\n", end)
 		return
 	}
 
@@ -520,7 +521,7 @@ func (d *Driver) Execute() {
 	d.run()
 	end := time.Now()
 	fmt.Printf("Job End Time: %s\n", end)
-	fmt.Printf("Job Execution Time: %s\n", end.Sub(start))
+	fmt.Printf("Job Execution Time without undeploy: %s\n", end.Sub(start))
 	d.Runtime = end.Sub(start)
 }
 
