@@ -249,7 +249,7 @@ func (j *Job) runReducer(binID uint) error {
 		}(key, values)
 	}
 
-	if viper.GetBool("flush") {
+	if viper.GetBool("durable") && !viper.GetBool("cleanup") {
 		if j.cacheSystem != nil {
 			log.Info("Flushing intermediate data to S3")
 			err := j.cacheSystem.Flush(j.fileSystem, j.outputPath)

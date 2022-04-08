@@ -29,7 +29,6 @@ func setupDefaults() {
 		"lambdaManageRole":   true,
 		"lambdaS3Key":        "corral_code.zip",
 		"lambdaS3Bucket":     "corral-code-bucket1",
-		"flush":			  false,
 		"cleanup":            false,
 		"durable":            false, //Should Intermeidiate data be flushed to the filesystem (in conflict with cleanup)
 		"verbose":            false,
