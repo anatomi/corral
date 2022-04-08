@@ -486,8 +486,6 @@ func (d *Driver) Main() {
 		if err != nil {
 			log.Infof("undeploy failed with %+v", err)
 		}
-		end := time.Now()
-		fmt.Printf("Job End Time AFTER UNDEPLOY: %s\n", end)
 		return
 	}
 
@@ -564,6 +562,8 @@ func (d *Driver) Undeploy(backendType *string) error {
 		log.Errorf("failed to undeploy, you are on youre own %s", err)
 		return err
 	}
+	end := time.Now()
+	fmt.Printf("Job End Time after undeploy: %s\n", end)
 
 	return nil
 }
