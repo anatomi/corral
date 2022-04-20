@@ -119,25 +119,25 @@ func (A *AWSEFSCache) Deploy() error {
 	}
 
 	var subnetIds string
-	if subnetIds = viper.GetString("efsVPCSubnetIds"); subnetIds != "" {
+	if subnetIds = viper.GetString("VPCSubnetIds"); subnetIds != "" {
 		if strings.ContainsRune(subnetIds,';'){
 			conf.VpcSubnetIds = strings.Split(subnetIds,";")
 		} else {
 			conf.VpcSubnetIds = []string{subnetIds}
 		}
 	} else if subnetIds == "" {
-		return fail("efsVPCSubnetIds")
+		return fail("VPCSubnetIds")
 	}
 
 	var securityGroupIds string
-	if securityGroupIds = viper.GetString("efsVPCSecurityGroupIds"); securityGroupIds != "" {
+	if securityGroupIds = viper.GetString("VPCSecurityGroupIds"); securityGroupIds != "" {
 		if strings.ContainsRune(securityGroupIds,';'){
 			conf.VpcSecurityGroupIds = strings.Split(securityGroupIds,";")
 		} else {
 			conf.VpcSecurityGroupIds = []string{securityGroupIds}
 		}
 	} else if securityGroupIds == "" {
-		return fail("efsVPCSecurityGroupIds")
+		return fail("VPCSecurityGroupIds")
 	}
 
 	conf.FilesystemName = viper.GetString("efsFilesystemName")

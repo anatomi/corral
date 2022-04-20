@@ -63,8 +63,8 @@ func setupDefaults() {
 		"lambdaEfsPath": "/mnt/cache",
 
 		// AWS VPC config
-		"efsVPCSubnetIds": "", // List of subnet ids associated with VPC separated by ';'"
-		"efsVPCSecurityGroupIds": "", // Security group id asociated with VPC, i.e.: "sg-085912345678*****"
+		"VPCSubnetIds": "", // List of subnet ids associated with VPC separated by ';'"
+		"VPCSecurityGroupIds": "", // Security group id asociated with VPC, i.e.: "sg-085912345678*****"
 	
 		// DynamoDB config
 		"dynamodbTableName": "CorralCache",

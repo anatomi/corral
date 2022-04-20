@@ -215,7 +215,7 @@ func (l *lambdaExecutor) Undeploy() error {
 		log.Errorf("Error when undeploying function: %s", err)
 	}
 
-	/*log.Info("Undeploying IAM Permissions")
+	log.Info("Undeploying IAM Permissions")
 	iam_err := l.IAMClient.DeletePermissions(corralRoleName)
 	if iam_err != nil {
 		log.Errorf("Error when undeploying IAM permissions: %s", err)
@@ -224,7 +224,7 @@ func (l *lambdaExecutor) Undeploy() error {
 		} else {
 			err = iam_err
 		}
-	}*/
+	}
 
 	return err
 

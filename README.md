@@ -163,18 +163,23 @@ Below are the config settings that may be changed.
 * `maxConcurrency` (int) - The maximum number of executors (local, Lambda, or otherwise) that may run concurrently. (Default: `100`)
 * `workingLocation` (string) - The location (local or S3) to use for writing intermediate and output data.
 * `verbose` (bool) - Enables debug logging if set to `true`
+* `cleanup` (bool) – Whether the intermediate data should be deleted after MapReduce job. (Default: `true`)
+* `durable` (bool) – Whether the intermediate data should be persistently stored to the file system, i.e., S3. (Default: `false`)
+* `cache` (int) – The type of intermediate data storage that should be used: 0 – NoCache (S3), 1 – Local, 2 – Redis, 3 – Olric, 4 – EFS, 5 – DynamoDB. (Default: `0`)
+
 
 #### Platform Settings
 <!-- TODO:change these to generic terms! -->
 * `lambdaFunctionName` (string) - The name to use for created Lambda functions. (Default: `corral_function`)
 * `lambdaTimeout` (int64) - The timeout (maximum function duration) in seconds of created Lambda functions. See [AWS lambda docs](https://docs.aws.amazon.com/lambda/latest/dg/resource-model.html) for details. (Default: `180`)
 * `lambdaMemory` (int64) - The maximum memory that a Lambda function may use. See [AWS lambda docs](https://docs.aws.amazon.com/lambda/latest/dg/resource-model.html) for details. (Default: `1500`)
-  `requestPerMinute` (int64) - The number of request to the FaaS platform per Minute (Default: `200`)
-  `lambdaEfsPath` (string) - Local mount path for EFS (Default: `/mnt/efs`)
+* `requestPerMinute` (int64) - The number of request to the FaaS platform per Minute (Default: `200`)
 
 #### Lambda Settings
 * `lambdaManageRole` (bool) - Whether corral should manage creating an IAM role for Lambda execution. (Default: `true`)
 * `lambdaRoleARN` (string) - If `lambdaManageRole` is disabled, the ARN specified in `lambdaRoleARN` is used as the Lambda function's executor role.
+* `lambdaS3Key` (string) - The name of the .zip file, containing the compiled Corral code. (Default: `corral_code.zip`)
+* `lambdaS3Bucket` (string) – The name of the S3 bucket, where the .zip file should be uploaded. (Default: `corral-code-bucket`)
 
 #### OpenWhisk Settings
 * `whiskHost` (string) - The host for OpenWhisk, including protocol and port.
@@ -185,12 +190,34 @@ Below are the config settings that may be changed.
 * `minioUser` (string) - The user for the minio account
 * `minioKey`  (string) - The access key for the minio accout.
 
+#### AWS VPC Settings
+* `VPCSubnetIds` (string) – List of subnet ids separated by ‘;’ associated with the VPC within the AWS instances should be created (needed for EFS and ElastiCache). 
+* `VPCSecurityGroupIds` (string) – Security group id associated with VPC, i.e.: "sg-085912345678*****"
+
 #### EFS Settings
 * `efsFilesystemName` (string) - The name of the fileesystem to be created. (Default: `corral_efs_filesystem`)
-* `efsVPCSubnetIds` (string) - VPC subnet ids in which EFS mount targets are created for EFS.
-* `efsVPCSecurityGroupIds` (string) - Security group id.
 * `efsAccessPointName` (string) - The name of the access point created for the filesystem. (Default: `corral_efs_accesspoint`)
 * `efsAccessPointPath` (string) - The root directory path for the access point. (Default: `/cache`)
+* `lambdaEfsPath` (string) - Local mount path for EFS (Default: `/mnt/cache`)
+
+#### Redis Settings
+* `redisDeploymentType` (int) – Where should the Redis cluster be deployed: Local (0), Kubernetes (1) or ElastiCache (2) 
+* `redisPort` (int) – Port where the Redis server runs. (Default: 6379)
+
+#### Kubernetes+Redis Settings
+* `kubernetesNamespace` (string) – The name to use for the Kubernetes namespace.
+* `kubernetesStorageClass` (string) – The StorageClass of the created Kubernetes cluster.
+
+
+#### ElastiCache+Redis Settings
+* `redisNodeGroups` (int) – How many shards should the ElastiCache instance have. (Default: `1` – cluster mode disabled)
+* `redisReplicasPerNodeGroup` (int) - How many replicas per shard. To be used when ElastiCache instance has more than one shard (cluster mode enabled)
+* `redisNumCacheClusters` (int) – How many nodes has the ElastiCache instance. To be used when cluster mode is enabled.	Maximum 6 (1 primary node, 5 replicas). (Default: `3`)
+* `elasticacheNodeType` (string) – Which type should the nodes have (Default: cache.t2.micro)
+* `elasticacheEngineVersion` (string) – (Default: 6.x)
+
+#### DynamoDB Settings
+* `dynamodbTableName` (string) – The name to use for created DynamoDB table. (Default: CorralCache)
 
 ### Command Line Flags
 

@@ -71,7 +71,7 @@ func (ec *ElasticacheRedisDeploymentStrategy) config() (elasticacheRedisConfig, 
 		} else {
 			conf.SubnetGroup.SubnetIds = []string{subnetIds}
 		}	
-	} else if subnetIds = viper.GetString("efsVPCSubnetIds"); subnetIds != "" {
+	} else if subnetIds = viper.GetString("VPCSubnetIds"); subnetIds != "" {
 		if strings.ContainsRune(subnetIds,';'){
 			conf.SubnetGroup.SubnetIds = strings.Split(subnetIds,";")
 		} else {
@@ -89,7 +89,7 @@ func (ec *ElasticacheRedisDeploymentStrategy) config() (elasticacheRedisConfig, 
 		} else {
 			conf.Cluster.SecurityGroupIds = []string{securityGroupIds}
 		}	
-	} else if securityGroupIds = viper.GetString("efsVPCSecurityGroupIds"); securityGroupIds != "" {
+	} else if securityGroupIds = viper.GetString("VPCSecurityGroupIds"); securityGroupIds != "" {
 		if strings.ContainsRune(securityGroupIds,';'){
 			conf.Cluster.SecurityGroupIds = strings.Split(securityGroupIds,";")
 		} else {
